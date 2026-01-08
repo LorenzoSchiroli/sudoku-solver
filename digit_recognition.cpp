@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <numeric>
 #include <opencv2/opencv.hpp>
-#include <opencv2/dnn.hpp> // Required for blobFromImageds
+#include <opencv2/dnn.hpp> 
 
 namespace fs = std::filesystem;
 
@@ -16,84 +16,132 @@ DigitRecognizer::DigitRecognizer(const std::string& modelPath)
     sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session = std::make_unique<Ort::Session>(env, modelPath.c_str(), sessionOptions);
 
-    // Allocator needed for string management
     Ort::AllocatorWithDefaultOptions allocator;
 
-    // Get Input Name
     auto inputNamePtr = session->GetInputNameAllocated(0, allocator);
     inputNameStr = inputNamePtr.get();
     inputNames = { inputNameStr.c_str() };
 
-    // Get Output Name
     auto outputNamePtr = session->GetOutputNameAllocated(0, allocator);
     outputNameStr = outputNamePtr.get();
     outputNames = { outputNameStr.c_str() };
 
-    // Set shapes: [Batch, Channel, Height, Width]
-    inputShape = {1, inputChannels, inputHeight, inputWidth};
-    inputTensorSize = inputChannels * inputHeight * inputWidth;
+    // Shapes
+    inputShape = { batchSize, inputChannels, inputHeight, inputWidth };
+    inputTensorSize = batchSize * inputChannels * inputHeight * inputWidth;
+    singleImageTensorSize = inputChannels * inputHeight * inputWidth;
 }
 
-std::vector<std::pair<std::string, int>> DigitRecognizer::predictFolder(const std::string& folderPath) {
-    std::vector<std::pair<std::string, int>> results;
-    std::vector<fs::path> files;
+std::vector<int> DigitRecognizer::predictList(const std::vector<cv::Mat>& images) {
+    // 1. Initialize results with default 0
+    std::vector<int> allPredictions(images.size(), 0);
 
-    try {
-        for (const auto& entry : fs::directory_iterator(folderPath)) {
-            if (entry.is_regular_file()) files.push_back(entry.path());
+    // Buffers to hold current batch and their original indices
+    std::vector<cv::Mat> batchBuffer;
+    std::vector<size_t> originalIndices;
+    batchBuffer.reserve(batchSize);
+    originalIndices.reserve(batchSize);
+
+    for (size_t i = 0; i < images.size(); ++i) {
+        // If empty, we skip adding to batch. 
+        // The result is already 0 in allPredictions[i] by default.
+        if (images[i].empty()) {
+            continue; 
         }
-    } catch (...) { return results; }
 
-    std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
-        return a.filename().string() < b.filename().string();
-    });
+        batchBuffer.push_back(images[i]);
+        originalIndices.push_back(i);
 
-    for (const auto& path : files) {
-        cv::Mat img = cv::imread(path.string(), cv::IMREAD_COLOR); // Force load as BGR
-        if (img.empty()) continue;
-
-        int pred = predictSingle(img);
-        if (pred >= 0) results.emplace_back(path.filename().string(), pred);
+        // If batch is full, execute
+        if (batchBuffer.size() == batchSize) {
+            std::vector<int> batchResults = predictBatch(batchBuffer);
+            
+            // Map results back to original positions
+            for (size_t k = 0; k < batchResults.size(); ++k) {
+                allPredictions[originalIndices[k]] = batchResults[k];
+            }
+            
+            batchBuffer.clear();
+            originalIndices.clear();
+        }
     }
-    return results;
+
+    // Process remaining items (partial batch)
+    if (!batchBuffer.empty()) {
+        std::vector<int> batchResults = predictBatch(batchBuffer);
+        for (size_t k = 0; k < batchResults.size(); ++k) {
+            allPredictions[originalIndices[k]] = batchResults[k];
+        }
+    }
+
+    return allPredictions;
 }
 
-int DigitRecognizer::predictSingle(const cv::Mat& image) {
-    if (image.empty()) return 0;
+std::vector<int> DigitRecognizer::predictBatch(const std::vector<cv::Mat>& batchImages) {
+    // 1. Prepare fixed-size input tensor
+    // We allocate the FULL fixed batch size (filled with 0.0f)
+    std::vector<float> inputTensorValues(inputTensorSize, 0.0f); 
 
-    std::vector<float> inputTensorValues;
-    
-    // 1. Preprocess using OpenCV DNN blob (Handles Resizing, float conversion, and HWC->CHW swap)
-    if (!preprocessImageToTensor(image, inputTensorValues)) return -1;
+    // 2. Fill the buffer
+    // Loop through the fixed batch size (0 to batchSize-1)
+    for (int i = 0; i < batchSize; ++i) {
+        // Calculate offset for this image slot
+        float* dstPtr = inputTensorValues.data() + (i * singleImageTensorSize);
 
-    // 2. Create Tensor
+        // If we have an image for this slot, process it.
+        // If i >= batchImages.size(), we just leave zeros (padding).
+        if (i < batchImages.size()) {
+             // We assume batchImages only contains valid mats now (filtered by predictList),
+             // but checking !empty() is good safety.
+            if (!batchImages[i].empty()) {
+                preprocessToBuffer(batchImages[i], dstPtr);
+            }
+        }
+    }
+
+    // 3. Create Tensor
     Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
         memoryInfo, inputTensorValues.data(), inputTensorSize,
         inputShape.data(), inputShape.size()
     );
 
+    std::vector<int> results;
+    results.reserve(batchImages.size());
+
     try {
-        // 3. Run Inference
+        // 4. Run Inference
         auto outputTensors = session->Run(
             Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 1
         );
 
-        // 4. Get Result
+        // 5. Parse Output
         float* floatArr = outputTensors.front().GetTensorMutableData<float>();
-        size_t count = outputTensors.front().GetTensorTypeAndShapeInfo().GetElementCount();
-        
-        return getArgMax(std::vector<float>(floatArr, floatArr + count));
+        size_t totalElements = outputTensors.front().GetTensorTypeAndShapeInfo().GetElementCount();
+        size_t numClasses = totalElements / batchSize;
+
+        // Retrieve results ONLY for the actual input images
+        for (size_t i = 0; i < batchImages.size(); ++i) {
+            float* imgResultStart = floatArr + (i * numClasses);
+            
+            // Safety check
+            if (batchImages[i].empty()) {
+                results.push_back(0); 
+            } else {
+                results.push_back(getArgMax(std::vector<float>(imgResultStart, imgResultStart + numClasses)));
+            }
+        }
 
     } catch (const Ort::Exception& e) {
         std::cerr << "ONNX Runtime Error: " << e.what() << std::endl;
-        return -1;
+        results.assign(batchImages.size(), 0);
     }
+
+    return results;
 }
 
-bool DigitRecognizer::preprocessImageToTensor(const cv::Mat& inputImage, std::vector<float>& inputTensorValues) {
+bool DigitRecognizer::preprocessToBuffer(const cv::Mat& inputImage, float* dst) {
     cv::Mat processed;
 
-    // 1. Handle Channels: Convert to BGR if Gray or BGRA
     if (inputImage.channels() == 1) {
         cv::cvtColor(inputImage, processed, cv::COLOR_GRAY2BGR);
     } else if (inputImage.channels() == 4) {
@@ -102,7 +150,6 @@ bool DigitRecognizer::preprocessImageToTensor(const cv::Mat& inputImage, std::ve
         processed = inputImage.clone();
     }
 
-    // 2. Resize and Pad (Letterbox) to keep aspect ratio
     int canvasH = inputHeight;
     int canvasW = inputWidth;
     
@@ -112,45 +159,85 @@ bool DigitRecognizer::preprocessImageToTensor(const cv::Mat& inputImage, std::ve
 
     cv::resize(processed, processed, cv::Size(newW, newH), 0, 0, cv::INTER_AREA);
 
-    // Create black canvas
     cv::Mat padded = cv::Mat::zeros(canvasH, canvasW, CV_8UC3);
-    
-    // Center image on canvas
     int x_offset = (canvasW - newW) / 2;
     int y_offset = (canvasH - newH) / 2;
     processed.copyTo(padded(cv::Rect(x_offset, y_offset, newW, newH)));
 
-    // 3. Convert to Blob (HWC -> CHW, BGR->RGB, Scale 0-1)
-    // swapRB = true (converts BGR to RGB), crop = false
     cv::Mat blob = cv::dnn::blobFromImage(padded, 1.0/255.0, cv::Size(canvasW, canvasH), cv::Scalar(), true, false);
 
-    // 4. Flatten to vector
     if (blob.isContinuous()) {
-        inputTensorValues.assign((float*)blob.data, (float*)blob.data + blob.total());
-    } else {
-        return false;
+        std::memcpy(dst, blob.data, blob.total() * sizeof(float));
+        return true;
+    } 
+    return false;
+}
+
+std::vector<std::pair<std::string, int>> DigitRecognizer::predictFolder(const std::string& folderPath) {
+    std::vector<fs::path> files;
+
+    try {
+        for (const auto& entry : fs::directory_iterator(folderPath)) {
+            if (entry.is_regular_file()) files.push_back(entry.path());
+        }
+    } catch (...) { return {}; }
+
+    std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
+        return a.filename().string() < b.filename().string();
+    });
+
+    std::vector<cv::Mat> images;
+    std::vector<std::string> filenames;
+    images.reserve(files.size());
+    filenames.reserve(files.size());
+
+    for (const auto& path : files) {
+        // Load all images, even if empty/failed
+        cv::Mat img = cv::imread(path.string(), cv::IMREAD_COLOR);
+        images.push_back(img); 
+        filenames.push_back(path.filename().string());
     }
 
-    return true;
+    // predictList handles empty images by returning 0
+    std::vector<int> predictions = predictList(images);
+
+    std::vector<std::pair<std::string, int>> results;
+    results.reserve(predictions.size());
+    for(size_t i = 0; i < predictions.size(); ++i) {
+        // We include all results, even 0s (which might mean empty image)
+        results.emplace_back(filenames[i], predictions[i]);
+    }
+    return results;
+}
+
+std::vector<std::vector<int>> DigitRecognizer::predictGrid(const std::vector<std::vector<cv::Mat>>& grid) {
+    // 1. Flatten
+    std::vector<cv::Mat> flatImages;
+    for (const auto& row : grid) {
+        flatImages.insert(flatImages.end(), row.begin(), row.end());
+    }
+
+    // 2. Predict (Handles empty mats automatically)
+    std::vector<int> flatResults = predictList(flatImages);
+
+    // 3. Reconstruct
+    std::vector<std::vector<int>> gridResults;
+    gridResults.reserve(grid.size());
+    
+    size_t idx = 0;
+    for (const auto& row : grid) {
+        std::vector<int> rowResults;
+        rowResults.reserve(row.size());
+        for (size_t c = 0; c < row.size(); ++c) {
+            rowResults.push_back(flatResults[idx++]);
+        }
+        gridResults.push_back(std::move(rowResults));
+    }
+    return gridResults;
 }
 
 int DigitRecognizer::getArgMax(const std::vector<float>& array) {
     if (array.empty()) return 0;
-    // pick prediction except 0
     auto maxIt = std::max_element(array.begin() + 1, array.end());
     return (int)std::distance(array.begin(), maxIt);
-}
-
-std::vector<std::vector<int>> DigitRecognizer::predictGrid(const std::vector<std::vector<cv::Mat>>& grid) {
-    std::vector<std::vector<int>> results;
-    results.reserve(grid.size());
-    for (const auto& row : grid) {
-        std::vector<int> rowResults;
-        rowResults.reserve(row.size());
-        for (const auto& cell : row) {
-            rowResults.push_back(predictSingle(cell)); // Returns -1 on error, which is safe enough or map to 0
-        }
-        results.push_back(std::move(rowResults));
-    }
-    return results;
 }

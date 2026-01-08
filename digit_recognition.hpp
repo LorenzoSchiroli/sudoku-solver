@@ -10,27 +10,29 @@
 class DigitRecognizer {
 public:
     DigitRecognizer(const std::string& modelPath);
+
+    std::vector<std::vector<int>> predictGrid(const std::vector<std::vector<cv::Mat>>& grid);
     std::vector<std::pair<std::string, int>> predictFolder(const std::string& folderPath);
 
-    // Changed: accept cv::Mat instead of a file path
-    int predictSingle(const cv::Mat& image);
+private:
+    // Keep other prediction helpers private (available for internal use)
+    std::vector<int> predictList(const std::vector<cv::Mat>& images);
+    std::vector<int> predictBatch(const std::vector<cv::Mat>& batchImages);
 
-    // Changed: accept cv::Mat instead of a file path; grayscale conversion happens here
-    bool preprocessImageToTensor(const cv::Mat& inputImage, std::vector<float>& inputTensorValues);
+    // Fixed declaration (no class-scope qualifier) and kept private
+    bool preprocessToBuffer(const cv::Mat& inputImage, float* dst);
     int getArgMax(const std::vector<float>& array);
 
-    // Add predictGrid: takes a 2D grid of cv::Mat and returns a 2D grid of predictions.
-    std::vector<std::vector<int>> predictGrid(const std::vector<std::vector<cv::Mat>>& grid);
-
-private:
     // --- MOVE THESE TO THE TOP ---
     const int inputWidth = 32;
     const int inputHeight = 32;
     const int inputChannels = 3;
+    const int batchSize = 8;
 
     // Now these can safely use the variables above because they are declared afterwards
     std::vector<int64_t> inputShape;
     size_t inputTensorSize;
+    size_t singleImageTensorSize;
     
     // ... rest of your variables (env, session, etc.)
     Ort::Env env;
