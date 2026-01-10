@@ -26,7 +26,7 @@ target_include_directories(grid_extraction PUBLIC src)
 target_include_directories(digit_recognition PUBLIC src)
 
 # Integration executable
-add_executable(main app/main.cpp)
+add_executable(main cli/main.cpp)
 target_link_libraries(main PRIVATE sudoku_detection grid_extraction digit_recognition sudoku_solver opencv::opencv onnxruntime::onnxruntime)
 
 # Per-module test exes (contain the previous mains)

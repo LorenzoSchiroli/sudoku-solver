@@ -29,4 +29,6 @@ class ExampleRecipe(ConanFile):
         self.options["opencv"].with_ximgproc = True
         self.options["opencv"].with_protobuf = False  # for protobuf conflict
         self.options["opencv"].with_eigen = False     # disable Eigen
+        # self.options["onnxruntime"].with_nnapi = True
+        # self.options["onnxruntime"].with_coreml = True
         
