@@ -17,14 +17,14 @@ class ExampleRecipe(ConanFile):
         cmake_layout(self)
 
     def validate(self):
-        # Check if the compiler version in the profile supports C++20
+        # Check if the compiler version in the profile supports C++23
         if self.settings.compiler.get_safe("cppstd"):
-            if int(self.settings.compiler.cppstd.value) < 20:
-                raise ConanInvalidConfiguration("This project requires C++20")
+            if int(self.settings.compiler.cppstd.value) < 23:
+                raise ConanInvalidConfiguration("This project requires C++23")
 
     def configure(self):
-        # Force the requirement for C++20 in the package settings
-        self.settings.compiler.cppstd = "20"
+        # Force the requirement for C++23 in the package settings
+        self.settings.compiler.cppstd = "23"
         self.options["opencv"].ximgproc = True
         self.options["opencv"].with_ximgproc = True
         self.options["opencv"].with_protobuf = False  # for protobuf conflict

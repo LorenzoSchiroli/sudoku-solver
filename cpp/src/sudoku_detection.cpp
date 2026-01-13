@@ -97,16 +97,4 @@ std::optional<Mat> detectSudokuBoard(const Mat& src) {
     return boards.front();
 }
 
-// New: save a series of Mats and return the filenames written
-vector<string> saveBoards(const vector<Mat>& boards, const string& outPrefix) {
-    vector<string> filenames;
-    int count = 0;
-    for (const auto& b : boards) {
-        string filename = outPrefix + to_string(++count) + ".png";
-        imwrite(filename, b);
-        filenames.push_back(filename);
-    }
-    return filenames;
-}
-
 // main removed: moved to `test_sudoku_detection.cpp` for library-style usage

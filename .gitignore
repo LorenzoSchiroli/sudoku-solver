@@ -60,7 +60,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/
 lib64/
 parts/
 sdist/
@@ -269,3 +269,4 @@ data/
 images/
 models/
 *.png
+cpp/*.onnx

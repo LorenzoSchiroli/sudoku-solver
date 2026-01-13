@@ -1,6 +1,20 @@
 #include "sudoku_detection.hpp"
 #include <iostream>
+#include <string>
 #include <opencv2/opencv.hpp>
+#include <vector> // added
+
+// New: save a series of Mats and return the filenames written
+std::vector<std::string> saveBoards(const std::vector<cv::Mat>& boards, const std::string& outPrefix) {
+    std::vector<std::string> filenames;
+    int count = 0;
+    for (const auto& b : boards) {
+        std::string filename = outPrefix + std::to_string(++count) + ".png";
+        cv::imwrite(filename, b);
+        filenames.push_back(filename);
+    }
+    return filenames;
+}
 
 int main(int argc, char** argv) {
     // Adjusted usage: allow optional output prefix

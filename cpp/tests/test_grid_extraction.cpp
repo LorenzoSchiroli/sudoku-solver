@@ -3,6 +3,17 @@
 #include <opencv2/opencv.hpp>
 #include <filesystem>
 
+// Utility function to print the resulting matrix (now checks if cv::Mat is empty)
+void print_matrix(const std::vector<std::vector<cv::Mat>>& matrix) {
+    std::cout << "\nSudoku Matrix (-1: Full, 0: Empty):\n";
+    for (const auto& row : matrix) {
+        for (const auto& mat : row) {
+            std::cout << (mat.empty() ? " 0" : " -1") << " ";
+        }
+        std::cout << "\n";
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <path_to_image.png>" << std::endl;

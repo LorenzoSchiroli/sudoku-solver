@@ -38,10 +38,11 @@ bool is_cell_full(const cv::Mat& cell_roi, double min_ratio = 0.005) {
     double total_pixels = check_area.total();
     double current_ratio = edge_pixel_count / total_pixels;
 
-    if (current_ratio > min_ratio) {
-        std::string filename = "cell.png";
-        cv::imwrite(filename, check_area);
-    }
+    // DEBUG
+    // if (current_ratio > min_ratio) {
+    //     std::string filename = "cell.png";
+    //     cv::imwrite(filename, check_area);
+    // }
 
     // Use an empirically determined ratio (0.005 or 0.5%) as a starting point.
     // This will flag a cell as 'full' if more than 0.5% of its central pixels are edges.
@@ -108,7 +109,10 @@ cv::Rect cropToContainingContour(const cv::Mat& binaryImg, const cv::Rect& regio
 
     // Operate on a copy of the binary subregion (so the original binaryImg isn't modified)
     cv::Mat cell = binaryImg(bounded).clone();
-    cv::imwrite("cell.png", cell);
+
+    // DEBUG
+    // cv::imwrite("cell.png", cell);
+
     removeBorders(cell);
 
     std::vector<std::vector<cv::Point>> contours;
@@ -210,9 +214,9 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
     cv::adaptiveThreshold(img_gray, img_edges, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 17, 4);
     // cv::threshold(img_gray, img_edges, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
 
-
-    std::string filename = "sudoku_edge.png";
-    cv::imwrite(filename, img_edges);
+    // DEBUG
+    // std::string filename = "sudoku_edge.png";
+    // cv::imwrite(filename, img_edges);
 
 
     // Store cell crops; empty cv::Mat means empty cell
@@ -265,46 +269,36 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
         }
     }
 
-    std::filesystem::path cells_dir("cells");
-    try {
-        if (!std::filesystem::exists(cells_dir)) {
-            std::filesystem::create_directory(cells_dir);
-        } else {
-            for (const auto& entry : std::filesystem::directory_iterator(cells_dir)) {
-                std::error_code ec;
-                std::filesystem::remove_all(entry.path(), ec);
-                if (ec) {
-                    std::cerr << "WARNING: Failed to remove " << entry.path()
-                                << ": " << ec.message() << std::endl;
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "ERROR: Filesystem operation failed: " << e.what() << std::endl;
-    }
-    for (size_t r = 0; r < sudoku_cells.size(); ++r) {
-        for (size_t c = 0; c < sudoku_cells[r].size(); ++c) {
-            const cv::Mat& mat = sudoku_cells[r][c];
-            if (!mat.empty()) {
-                std::string filename = "cell_" + std::to_string(r) + "_" + std::to_string(c) + ".png";
-                std::filesystem::path outpath = cells_dir / filename;
-                cv::imwrite(outpath.string(), mat);
-            }
-        }
-    }
+    // DEBUG
+    // std::filesystem::path cells_dir("cells");
+    // try {
+    //     if (!std::filesystem::exists(cells_dir)) {
+    //         std::filesystem::create_directory(cells_dir);
+    //     } else {
+    //         for (const auto& entry : std::filesystem::directory_iterator(cells_dir)) {
+    //             std::error_code ec;
+    //             std::filesystem::remove_all(entry.path(), ec);
+    //             if (ec) {
+    //                 std::cerr << "WARNING: Failed to remove " << entry.path()
+    //                             << ": " << ec.message() << std::endl;
+    //             }
+    //         }
+    //     }
+    // } catch (const std::exception& e) {
+    //     std::cerr << "ERROR: Filesystem operation failed: " << e.what() << std::endl;
+    // }
+    // for (size_t r = 0; r < sudoku_cells.size(); ++r) {
+    //     for (size_t c = 0; c < sudoku_cells[r].size(); ++c) {
+    //         const cv::Mat& mat = sudoku_cells[r][c];
+    //         if (!mat.empty()) {
+    //             std::string filename = "cell_" + std::to_string(r) + "_" + std::to_string(c) + ".png";
+    //             std::filesystem::path outpath = cells_dir / filename;
+    //             cv::imwrite(outpath.string(), mat);
+    //         }
+    //     }
+    // }
 
     return sudoku_cells;
-}
- 
-// Utility function to print the resulting matrix (now checks if cv::Mat is empty)
-void print_matrix(const std::vector<std::vector<cv::Mat>>& matrix) {
-    std::cout << "\nSudoku Matrix (-1: Full, 0: Empty):\n";
-    for (const auto& row : matrix) {
-        for (const auto& mat : row) {
-            std::cout << (mat.empty() ? " 0" : " -1") << " ";
-        }
-        std::cout << "\n";
-    }
 }
  
 // main removed: moved to `test_grid_extraction.cpp` for library-style usage
