@@ -270,3 +270,5 @@ images/
 models/
 *.png
 cpp/*.onnx
+build_*/
+deps/

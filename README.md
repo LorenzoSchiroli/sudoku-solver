@@ -10,10 +10,10 @@ The program is structured in 4 steps:
 
 ## Installation
 
-For CPP:
-1. Install "CMake"
-2. Install "Conan" package manager
-3. Run: `./build.sh`
+For CPP (vendor-based dependencies; no Conan required):
+1. install opencv and onnxruntime via homebrew or python fetch_deps.py
+2. build.sh macos
+3. ./build_macos/main ../images/cover.jpg
 
 For python (digit recongnition model):
 1. Install "uv" package manager
