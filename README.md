@@ -19,6 +19,10 @@ For python (digit recongnition model):
 1. Install "uv" package manager
 2. Run: `uv sync`
 
+For flutter:
+1. move models/resnet18_svhn_int8.onnx in flt/assets/resnet18_svhn_int8.onnx
+2. run "flutter run"
+
 ## Run
 
 Example:

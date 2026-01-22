@@ -2,6 +2,8 @@ from pathlib import Path
 import urllib.request
 import zipfile
 import tarfile
+import shutil
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPS = ROOT / "deps"
@@ -35,11 +37,17 @@ def extract_tgz(src: Path, dst: Path):
 
 # Android
 opencv_android_zip = DEPS / "opencv/opencv-android.zip"
+headers_dir = DEPS / "opencv/android"
 download(
     "https://github.com/opencv/opencv/releases/download/4.13.0/opencv-4.13.0-android-sdk.zip",
     opencv_android_zip,
 )
-extract_zip(opencv_android_zip, DEPS / "opencv/android")
+extract_zip(opencv_android_zip, headers_dir)
+target_dir = headers_dir / "onnxruntime"
+target_dir.mkdir(parents=True, exist_ok=True)
+for item in headers_dir.iterdir():
+    if item != target_dir:
+        shutil.move(str(item), str(target_dir / item.name))
 
 # iOS
 opencv_ios_zip = DEPS / "opencv/opencv-ios.zip"
@@ -48,6 +56,7 @@ download(
     opencv_ios_zip,
 )
 extract_zip(opencv_ios_zip, DEPS / "opencv/ios")
+
 
 # macOS: dev-only (Homebrew / system)
 # =========================================================

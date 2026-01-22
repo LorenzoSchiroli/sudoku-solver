@@ -1,11 +1,11 @@
 # Dependencies.cmake
 
-set(DEPS_DIR ${CMAKE_SOURCE_DIR}/deps)
+set(DEPS_DIR ${CMAKE_SOURCE_DIR}/../deps)
 
 # ================= OpenCV =================
 
 if(ANDROID)
-    set(OPENCV_ROOT ${DEPS_DIR}/opencv/android/sdk/native)
+    set(OPENCV_ROOT ${DEPS_DIR}/opencv/android/OpenCV-android-sdk/sdk/native)
 
     add_library(opencv SHARED IMPORTED)
     set_target_properties(opencv PROPERTIES
@@ -36,13 +36,12 @@ endif()
 # ================= ONNX Runtime =================
 
 if(ANDROID)
-    add_library(onnxruntime SHARED IMPORTED)
-    set_target_properties(onnxruntime PROPERTIES
-        IMPORTED_LOCATION
-            ${DEPS_DIR}/onnxruntime/android/jni/${ANDROID_ABI}/libonnxruntime.so
-        INTERFACE_INCLUDE_DIRECTORIES
-            ${DEPS_DIR}/onnxruntime/android/headers
+    add_library(onnx_lib SHARED IMPORTED)
+    set_target_properties(onnx_lib PROPERTIES
+        IMPORTED_LOCATION "${DEPS_DIR}/onnxruntime/android/jni/${ANDROID_ABI}/libonnxruntime.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${DEPS_DIR}/onnxruntime/android/headers"
     )
+    add_library(onnxruntime::onnxruntime ALIAS onnx_lib)
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_library(onnxruntime INTERFACE)
