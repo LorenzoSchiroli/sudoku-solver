@@ -88,17 +88,20 @@ class SudokuBridge {
     calloc.free(modelPathPtr);
   }
 
-  List<int> solveSudoku(String imagePath) {
-    if (_processor == null) return List.filled(81, 0);
+  List<Map<String, int>> solveSudoku(String imagePath) {
+    if (_processor == null) return List.filled(81, {'number': 0, 'mask': 0});
 
     final pathPtr = imagePath.toNativeUtf8();
     final resultPtr = _processFileFunc(_processor!, pathPtr);
 
-    List<int> board = [];
+    List<Map<String, int>> board = [];
     if (resultPtr != nullptr) {
       final result = resultPtr.ref;
       for (int i = 0; i < 81; i++) {
-        board.add(result.cells[i].number);
+        board.add({
+          'number': result.cells[i].number,
+          'mask': result.cells[i].mask,
+        });
       }
       _freeResultFunc(resultPtr);
     }

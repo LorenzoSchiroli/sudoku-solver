@@ -13,7 +13,7 @@ class SudokuScreen extends StatefulWidget {
 class _SudokuScreenState extends State<SudokuScreen> {
   final bridge = SudokuBridge();
   final ImagePicker _picker = ImagePicker();
-  List<int> sudokuBoard = [];
+  List<Map<String, int>> sudokuBoard = [];
   bool isProcessing = false;
   bool isInitialized = false;
 
@@ -92,6 +92,11 @@ class _SudokuScreenState extends State<SudokuScreen> {
         itemBuilder: (context, index) {
           int row = index ~/ 9;
           int col = index % 9;
+          final cellData = sudokuBoard[index];
+          final number = cellData['number'];
+          final mask = cellData['mask'];
+          final color = mask == 1 ? Colors.black : Colors.blue;
+
           return Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -104,10 +109,11 @@ class _SudokuScreenState extends State<SudokuScreen> {
             ),
             child: Center(
               child: Text(
-                sudokuBoard[index] != 0 ? "${sudokuBoard[index]}" : "",
-                style: const TextStyle(
+                number != 0 ? "$number" : "",
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: color,
                 ),
               ),
             ),
