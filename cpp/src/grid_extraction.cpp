@@ -203,7 +203,9 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
     }
 
     cv::Mat img_color = input_img.clone();
-    cv::resize(img_color, img_color, cv::Size(512, 512));
+
+    // Resize with INTER_AREA to remove moire pattern
+    cv::resize(img_color, img_color, cv::Size(512, 512), 0, 0, cv::INTER_AREA);
 
     cv::Mat img_gray;
     cv::cvtColor(img_color, img_gray, cv::COLOR_BGR2GRAY);
@@ -214,7 +216,7 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
     cv::adaptiveThreshold(img_gray, img_edges, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 17, 4);
     // cv::threshold(img_gray, img_edges, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
 
-    // DEBUG
+    // // DEBUG
     // std::string filename = "sudoku_edge.png";
     // cv::imwrite(filename, img_edges);
 
@@ -269,7 +271,7 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
         }
     }
 
-    // DEBUG
+    // // DEBUG
     // std::filesystem::path cells_dir("cells");
     // try {
     //     if (!std::filesystem::exists(cells_dir)) {
