@@ -15,6 +15,8 @@ SudokuMain::SudokuMain(const std::string& modelPath)
 
 SudokuResult SudokuMain::sudoku_img2grid(const cv::Mat& originalImage) {
 
+    std::vector<std::vector<Cell>> sudokuGrid(9, std::vector<Cell>(9, {0, 0}));
+
     // --- 1. Sudoku Detection ---
     // auto t1_start = std::chrono::high_resolution_clock::now();
     std::optional<cv::Mat> boardCrop = detectSudokuBoard(originalImage);
@@ -24,7 +26,7 @@ SudokuResult SudokuMain::sudoku_img2grid(const cv::Mat& originalImage) {
 
     // Check Detection
     if (!boardCrop.has_value()) {
-        return SudokuResult{ {}, SudokuStatus::GridNotFound };
+        return SudokuResult{ sudokuGrid, SudokuStatus::GridNotFound };
     }
 
     // --- 2. Grid Extraction ---
@@ -43,12 +45,13 @@ SudokuResult SudokuMain::sudoku_img2grid(const cv::Mat& originalImage) {
     // auto t3_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t3_end - t3_start).count();
     // std::cout << "Step 3 (Digit Recognition) took: " << t3_ms << " ms" << std::endl;
 
-    // Build single grid with per-cell (number, mask)
-    std::vector<std::vector<Cell>> sudokuGrid(9, std::vector<Cell>(9, {0, 0}));
+    // Fill grid with detected numbers
     for (int i = 0; i < 9; ++i) {
         for (int j = 0; j < 9; ++j) {
-            sudokuGrid[i][j].number = puzzleGrid[i][j];
-            sudokuGrid[i][j].mask = (puzzleGrid[i][j] != 0) ? 1 : 0;
+            if (puzzleGrid[i][j] > 0) {
+                sudokuGrid[i][j].number = puzzleGrid[i][j];
+                sudokuGrid[i][j].mask = 1;
+            }
         }
     }
 
@@ -65,7 +68,9 @@ SudokuResult SudokuMain::sudoku_img2grid(const cv::Mat& originalImage) {
     if (success) {
         for (int i = 0; i < 9; ++i) {
             for (int j = 0; j < 9; ++j) {
-                sudokuGrid[i][j].number = solvedGrid[i][j];
+                if (sudokuGrid[i][j].number == 0) {
+                    sudokuGrid[i][j].number = solvedGrid[i][j];
+                }
             }
         }
     } else {

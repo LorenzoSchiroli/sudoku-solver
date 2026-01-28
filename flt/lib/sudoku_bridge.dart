@@ -4,6 +4,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 
 // 1. Define C Structs
 final class CellC extends Struct {
@@ -29,35 +30,43 @@ final DynamicLibrary nativeLib = Platform.isAndroid
 typedef CreateProcessorC = Pointer<Void> Function(Pointer<Utf8> modelPath);
 typedef CreateProcessorDart = Pointer<Void> Function(Pointer<Utf8> modelPath);
 
-typedef ProcessImageFileC =
+typedef ProcessImageBytesC =
     Pointer<SudokuResultC> Function(
       Pointer<Void> processor,
-      Pointer<Utf8> path,
+      Pointer<Uint8> data,
+      IntPtr length,
     );
-typedef ProcessImageFileDart =
+typedef ProcessImageBytesDart =
     Pointer<SudokuResultC> Function(
       Pointer<Void> processor,
-      Pointer<Utf8> path,
+      Pointer<Uint8> data,
+      int length,
     );
 
 typedef FreeResultC = Void Function(Pointer<SudokuResultC> result);
 typedef FreeResultDart = void Function(Pointer<SudokuResultC> result);
 
+typedef DebugImageC = Void Function(Pointer<Uint8> data, IntPtr length);
+typedef DebugImageDart = void Function(Pointer<Uint8> data, int length);
+
 // 4. Helper Class
 class SudokuBridge {
+  static final SudokuBridge _instance = SudokuBridge._internal();
+  factory SudokuBridge() => _instance;
+
   Pointer<Void>? _processor;
   late CreateProcessorDart _createFunc;
-  late ProcessImageFileDart _processFileFunc;
+  late ProcessImageBytesDart _processBytesFunc;
   late FreeResultDart _freeResultFunc;
 
-  SudokuBridge() {
+  SudokuBridge._internal() {
     _createFunc = nativeLib
         .lookupFunction<CreateProcessorC, CreateProcessorDart>(
           'sudoku_create_processor',
         );
-    _processFileFunc = nativeLib
-        .lookupFunction<ProcessImageFileC, ProcessImageFileDart>(
-          'sudoku_process_image_file',
+    _processBytesFunc = nativeLib
+        .lookupFunction<ProcessImageBytesC, ProcessImageBytesDart>(
+          'sudoku_process_image_bytes',
         );
     _freeResultFunc = nativeLib.lookupFunction<FreeResultC, FreeResultDart>(
       'sudoku_free_result',
@@ -88,25 +97,85 @@ class SudokuBridge {
     calloc.free(modelPathPtr);
   }
 
-  List<Map<String, int>> solveSudoku(String imagePath) {
-    if (_processor == null) return List.filled(81, {'number': 0, 'mask': 0});
-
-    final pathPtr = imagePath.toNativeUtf8();
-    final resultPtr = _processFileFunc(_processor!, pathPtr);
-
-    List<Map<String, int>> board = [];
-    if (resultPtr != nullptr) {
-      final result = resultPtr.ref;
-      for (int i = 0; i < 81; i++) {
-        board.add({
-          'number': result.cells[i].number,
-          'mask': result.cells[i].mask,
-        });
-      }
-      _freeResultFunc(resultPtr);
+  Future<Map<String, dynamic>> solveSudokuFromBytes(
+    Uint8List imageBytes,
+  ) async {
+    if (_processor == null || _processor!.address == 0) {
+      return {'board': [], 'status': 0};
     }
 
-    calloc.free(pathPtr);
-    return board;
+    // 1. Allocate native memory
+    final Pointer<Uint8> buffer = malloc.allocate<Uint8>(imageBytes.length);
+
+    try {
+      // 2. Copy the bytes
+      final nativeBytes = buffer.asTypedList(imageBytes.length);
+      nativeBytes.setAll(0, imageBytes);
+
+      // 3. Call C++
+      final Pointer<SudokuResultC> resultPtr = _processBytesFunc(
+        _processor!,
+        buffer,
+        imageBytes.length,
+      );
+
+      // 4. Handle the result
+      final List<Map<String, int>> board = [];
+      int status = -1; // Default error status
+
+      if (resultPtr != nullptr) {
+        try {
+          final result = resultPtr.ref;
+          status = result.status;
+
+          for (int i = 0; i < 81; i++) {
+            board.add({
+              'number': result.cells[i].number,
+              'mask': result.cells[i].mask,
+            });
+          }
+        } finally {
+          // 5. CRITICAL: Free the struct allocated by C++
+          // (assuming your C++ used 'new' to create the result)
+          _freeResultFunc(resultPtr);
+        }
+      }
+
+      return {'board': board, 'status': status};
+    } catch (e) {
+      debugPrint("Sudoku Solver Error: $e");
+      return {'board': [], 'status': -1};
+    } finally {
+      // 6. ALWAYS free the input image buffer
+      malloc.free(buffer);
+    }
   }
+
+  /// Send raw image bytes to the native debug bridge.
+  /// This copies bytes into native memory, calls the C function, then frees.
+  /// Send raw image bytes to the native debug bridge.
+  /// This copies bytes into native memory, calls the C function, reads back
+  /// any modifications and returns the modified bytes.
+  ///
+  //   Future<Uint8List> sendDebugImage(Uint8List imageBytes) async {
+  //     // 1. Allocate exactly the amount of memory needed on the native heap
+  //     final Pointer<Uint8> buffer = malloc.allocate<Uint8>(imageBytes.length);
+
+  //     try {
+  //       // 2. Create a typed view of the native memory and copy Dart bytes into it
+  //       final nativeBytes = buffer.asTypedList(imageBytes.length);
+  //       nativeBytes.setAll(0, imageBytes);
+
+  //       // 3. Call the C++ function
+  //       // C++ modifies the memory at this pointer address directly
+  //       _debugImageFunc(buffer, imageBytes.length);
+
+  //       // 4. Extract the data back into a Dart-managed Uint8List
+  //       // Use .fromList() to CLONE the data before we free the pointer
+  //       return Uint8List.fromList(nativeBytes);
+  //     } finally {
+  //       // 5. ALWAYS free the pointer to prevent a memory leak
+  //       malloc.free(buffer);
+  //     }
+  //   }
 }

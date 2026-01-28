@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'sudoku_bridge.dart';
+import 'dart:typed_data';
 
 void main() => runApp(const MaterialApp(home: SudokuScreen()));
 
@@ -14,6 +15,7 @@ class _SudokuScreenState extends State<SudokuScreen> {
   final bridge = SudokuBridge();
   final ImagePicker _picker = ImagePicker();
   List<Map<String, int>> sudokuBoard = [];
+  String statusMessage = "";
   bool isProcessing = false;
   bool isInitialized = false;
 
@@ -37,11 +39,17 @@ class _SudokuScreenState extends State<SudokuScreen> {
 
     setState(() => isProcessing = true);
 
-    // Process image in C++
-    final result = bridge.solveSudoku(image.path);
+    // Read the image into RAM as bytes
+    final Uint8List imageBytes = await image.readAsBytes();
+
+    // Process in C++ using memory bridge (use original bytes)
+    final result = await bridge.solveSudokuFromBytes(imageBytes);
 
     setState(() {
-      sudokuBoard = result;
+      sudokuBoard = List<Map<String, int>>.from(
+        (result['board'] as List).cast<Map<String, int>>(),
+      );
+      statusMessage = _statusText(result['status'] as int);
       isProcessing = false;
     });
   }
@@ -61,9 +69,20 @@ class _SudokuScreenState extends State<SudokuScreen> {
             else if (isProcessing)
               const CircularProgressIndicator()
             else if (sudokuBoard.isEmpty)
-              const Text("Tap the camera button to scan a puzzle")
+              Text(
+                statusMessage.isEmpty
+                    ? "Tap the camera button to scan a puzzle"
+                    : statusMessage,
+              )
             else
-              AspectRatio(aspectRatio: 1, child: _buildSudokuGrid()),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(statusMessage),
+                  const SizedBox(height: 8),
+                  AspectRatio(aspectRatio: 1, child: _buildSudokuGrid()),
+                ],
+              ),
           ],
         ),
       ),
@@ -121,5 +140,18 @@ class _SudokuScreenState extends State<SudokuScreen> {
         },
       ),
     );
+  }
+}
+
+String _statusText(int status) {
+  switch (status) {
+    case 0:
+      return "Grid not found";
+    case 1:
+      return "Grid found but not solved";
+    case 2:
+      return "Solved";
+    default:
+      return "Unknown status ($status)";
   }
 }

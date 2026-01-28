@@ -22,9 +22,11 @@ extern "C" {
 enum SudokuStatusC : int32_t {
     SudokuStatus_GridNotFound = 0,
     SudokuStatus_NotSolved   = 1,
-    SudokuStatus_Solved      = 2
+    SudokuStatus_Solved      = 2,
+    SudokuStatus_InitializationError = 3
 };
 
+// #pragma pack(push, 1) // Force no padding
 // C representation of a cell (row-major ordering expected)
 typedef struct {
     int32_t number; // 0..9
@@ -37,6 +39,7 @@ typedef struct {
     // 81 cells (9 rows * 9 cols)
     CellC cells[81];
 } SudokuResultC;
+// #pragma pack(pop)
 
 // Lifecycle for processor (opaque pointer representing a SudokuMain instance)
 // model_path may be nullptr to use the default model path.
@@ -48,8 +51,10 @@ SUDOKU_BRIDGE_API void sudoku_destroy_processor(void* processor);
 // Returns nullptr on fatal allocation error.
 SUDOKU_BRIDGE_API SudokuResultC* sudoku_process_image_bytes(void* processor, const uint8_t* data, size_t length);
 
+// SUDOKU_BRIDGE_API void debug_image_bridge(uint8_t* data, size_t length);
+
 // Convenience: process image from file path
-SUDOKU_BRIDGE_API SudokuResultC* sudoku_process_image_file(void* processor, const char* path);
+// SUDOKU_BRIDGE_API SudokuResultC* sudoku_process_image_file(void* processor, const char* path);
 
 // Free result returned by any of the processing functions
 SUDOKU_BRIDGE_API void sudoku_free_result(SudokuResultC* result);

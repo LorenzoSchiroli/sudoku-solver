@@ -12,7 +12,7 @@ The program is structured in 4 steps:
 
 For CPP (vendor-based dependencies; no Conan required):
 1. install opencv and onnxruntime via homebrew or python fetch_deps.py
-2. build.sh macos
+2. sh ./build.sh macos
 3. ./build_macos/main ../images/cover.jpg
 
 For python (digit recongnition model):
@@ -21,7 +21,11 @@ For python (digit recongnition model):
 
 For flutter:
 1. move models/resnet18_svhn_int8.onnx in flt/assets/resnet18_svhn_int8.onnx
-2. run "flutter run"
+2. run "flutter run" for debug
+3. 
+
+flutter build apk --release
+flutter run --profile
 
 ## Run
 
