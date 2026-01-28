@@ -38,16 +38,43 @@ vector<Mat> detectSudokuBoards(const Mat& src) {
     vector<Mat> boards;
     if (src.empty()) return boards;
 
-    Mat gray, blurred, thresh;
-    cvtColor(src, gray, COLOR_BGR2GRAY);
+    Mat gray, blurred, thresh, resized;
+    float targetSize = 1000.0f;
+    float scale = targetSize / std::max(src.cols, src.rows);
+    resize(src, resized, Size(), scale, scale, INTER_AREA);
+    cvtColor(resized, gray, COLOR_BGR2GRAY);
     GaussianBlur(gray, blurred, Size(9, 9), 0);
 
     // Adaptive threshold is crucial for lighting variations
-    adaptiveThreshold(blurred, thresh, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 11, 2);
+    adaptiveThreshold(blurred, thresh, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 29, 3);
+
+    // Save threshold image for debugging/inspection
+    // try {
+    //     imwrite("thresh.png", thresh);
+    // } catch (const cv::Exception& e) {
+    //     cerr << "Warning: failed to write threshold image: " << e.what() << endl;
+    // }
 
     // Find contours
     vector<vector<Point>> contours;
     findContours(thresh, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    // double minArea = 1000.0; // Set your threshold
+
+    // contours.erase(std::remove_if(contours.begin(), contours.end(),
+    // [minArea](const std::vector<cv::Point>& c) {
+    //     return cv::contourArea(c) < minArea;
+    // }), contours.end());
+
+    // // Save a simple debug image showing all detected contours
+    // try {
+    //     Mat contourVis;
+    //     cvtColor(thresh, contourVis, COLOR_GRAY2BGR);
+    //     drawContours(contourVis, contours, -1, Scalar(0, 0, 255), 2, LINE_AA);
+    //     imwrite("detected_contours.png", contourVis);
+    // } catch (const cv::Exception& e) {
+    //     cerr << "Warning: failed to write contour debug image: " << e.what() << endl;
+    // }
 
     // Sort contours by area (descending)
     sort(contours.begin(), contours.end(), [](const vector<Point>& a, const vector<Point>& b) {
@@ -60,10 +87,28 @@ vector<Mat> detectSudokuBoards(const Mat& src) {
 
         double peri = arcLength(cnt, true);
         vector<Point> approx;
-        approxPolyDP(cnt, approx, 0.02 * peri, true);
+        approxPolyDP(cnt, approx, 0.05 * peri, true);
 
         if (approx.size() == 4 && isContourConvex(approx)) {
-            vector<Point2f> ordered = orderPoints(approx);
+
+            // NEW: Check if any point touches the image edge
+            bool touchesEdge = false;
+            int margin = 2; // px margin
+            for (const auto& p : approx) {
+                if (p.x <= margin || p.x >= resized.cols - margin || 
+                    p.y <= margin || p.y >= resized.rows - margin) {
+                    touchesEdge = true;
+                    break;
+                }
+            }
+            if (touchesEdge) continue; // Skip boards that aren't fully contained
+
+            vector<Point2f> orderedLowRes = orderPoints(approx);
+
+            vector<Point2f> ordered;
+            for(auto& p : orderedLowRes) {
+                ordered.push_back(Point2f(p.x / scale, p.y / scale));
+            }
 
             float wA = norm(ordered[2] - ordered[3]);
             float wB = norm(ordered[1] - ordered[0]);
@@ -87,6 +132,16 @@ vector<Mat> detectSudokuBoards(const Mat& src) {
             boards.push_back(output);
         }
     }
+
+    // // Save the first detected board for debugging/inspection
+    // if (!boards.empty()) {
+    //     try {
+    //         imwrite("first_board.png", boards.front());
+    //     } catch (const cv::Exception& e) {
+    //         cerr << "Warning: failed to write first board image: " << e.what() << endl;
+    //     }
+    // }
+
     return boards;
 }
 
