@@ -28,16 +28,28 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-    }
-
-    defaultConfig {
-        // ...
         externalNativeBuild {
             cmake {
                 // Correct way to pass arguments in Kotlin DSL
                 cppFlags("-std=c++23")
                 arguments("-DANDROID_STL=c++_shared")
             }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true 
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            ndk {
+                abiFilters.clear()
+                abiFilters.add("arm64-v8a")
+            }
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
