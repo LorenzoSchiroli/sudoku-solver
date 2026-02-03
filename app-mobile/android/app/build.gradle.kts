@@ -44,7 +44,7 @@ android {
     // This is the specific block causing the 'path' error
     externalNativeBuild {
         cmake {
-            path = file("../../../cpp/CMakeLists.txt")
+            path = file("../../../core-vision/CMakeLists.txt")
         }
     }
 
