@@ -10,7 +10,7 @@ The program is structured in 4 steps:
 
 ## Installation
 
-For CPP (vendor-based dependencies; no Conan required):
+For core-vision (vendor-based dependencies; no Conan required):
 1. install opencv and onnxruntime via homebrew or python fetch_deps.py
 2. sh ./build.sh macos
 3. ./build_macos/main ../images/cover.jpg
@@ -20,7 +20,7 @@ For python (digit recongnition model):
 2. Run: `uv sync`
 
 For flutter:
-1. move models/resnet18_svhn_int8.onnx in flt/assets/resnet18_svhn_int8.onnx
+1. move models/resnet18_svhn_int8.onnx in app-mobile/assets/resnet18_svhn_int8.onnx
 2. run "flutter run" for debug
 3. 
 

@@ -6,7 +6,7 @@ data/
 images/
 models/
 *.png
-cpp/*.onnx
+core-vision/*.onnx
 build/
 build_*/
 deps/
