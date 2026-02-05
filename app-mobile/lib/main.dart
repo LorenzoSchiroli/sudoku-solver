@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 import 'sudoku_bridge.dart';
 import 'dart:typed_data';
 
-void main() => runApp(const MaterialApp(home: SudokuScreen()));
+// Global variable to store available cameras
+List<CameraDescription> cameras = [];
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    cameras = await availableCameras();
+  } on CameraException catch (e) {
+    print('Error initializing camera: $e');
+  }
+  runApp(const MaterialApp(home: SudokuScreen()));
+}
 
 class SudokuScreen extends StatefulWidget {
   const SudokuScreen({super.key});
@@ -11,88 +22,288 @@ class SudokuScreen extends StatefulWidget {
   State<SudokuScreen> createState() => _SudokuScreenState();
 }
 
-class _SudokuScreenState extends State<SudokuScreen> {
+class _SudokuScreenState extends State<SudokuScreen>
+    with WidgetsBindingObserver {
   final bridge = SudokuBridge();
-  final ImagePicker _picker = ImagePicker();
+  CameraController? _controller;
+
+  // App State
   List<Map<String, int>> sudokuBoard = [];
   String statusMessage = "";
-  bool isProcessing = false;
-  bool isInitialized = false;
+
+  // Flags
+  bool isBridgeReady = false; // C++ model loaded?
+  bool isCameraActive = false; // Are we currently in camera mode?
+  bool isProcessing = false; // Are we processing an image?
+  bool isFlashOn = false; // Is the flash (torch) enabled?
 
   @override
   void initState() {
     super.initState();
-    // Start initializing the C++ processor immediately
+    WidgetsBinding.instance.addObserver(this);
     _setupBridge();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  // Handle app lifecycle (background/foreground)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    if (state == AppLifecycleState.inactive) {
+      _controller?.dispose();
+    } else if (state == AppLifecycleState.resumed && isCameraActive) {
+      _startCamera(); // Re-initialize if we come back and camera was active
+    }
   }
 
   Future<void> _setupBridge() async {
     await bridge.init();
-    setState(() => isInitialized = true);
+    if (mounted) setState(() => isBridgeReady = true);
+  }
+
+  // --- Camera Logic ---
+
+  Future<void> _startCamera() async {
+    if (cameras.isEmpty) return;
+
+    final controller = CameraController(
+      cameras[0],
+      ResolutionPreset.high,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg,
+    );
+
+    _controller = controller;
+
+    try {
+      await controller.initialize();
+      // IMPORTANT: Turn flash OFF by default to stop random flashing
+      await controller.setFlashMode(FlashMode.off);
+
+      if (mounted) {
+        setState(() {
+          isCameraActive = true;
+          isFlashOn = false;
+        });
+      }
+    } catch (e) {
+      print("Camera init error: $e");
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    if (mounted) setState(() => isCameraActive = false);
+    await _controller?.dispose();
+    _controller = null;
+  }
+
+  Future<void> _toggleFlash() async {
+    if (_controller == null) return;
+    try {
+      // Toggle between Torch (steady light) and Off
+      FlashMode newMode = isFlashOn ? FlashMode.off : FlashMode.torch;
+      await _controller!.setFlashMode(newMode);
+      setState(() => isFlashOn = !isFlashOn);
+    } catch (e) {
+      print("Error toggling flash: $e");
+    }
   }
 
   Future<void> _takePhoto() async {
-    if (!isInitialized) return;
-
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
-    if (image == null) return;
+    debugPrint("📸 CHECKPOINT 1: Button Pressed");
+    if (_controller == null ||
+        !_controller!.value.isInitialized ||
+        isProcessing)
+      return;
 
     setState(() => isProcessing = true);
 
-    // Read the image into RAM as bytes
-    final Uint8List imageBytes = await image.readAsBytes();
+    try {
+      debugPrint("📸 CHECKPOINT 2: Taking Picture...");
+      final XFile image = await _controller!.takePicture();
+      debugPrint("📸 CHECKPOINT 3: Reading Bytes...");
+      final Uint8List imageBytes = await image.readAsBytes();
 
-    // Process in C++ using memory bridge (use original bytes)
-    final result = await bridge.solveSudokuFromBytes(imageBytes);
+      debugPrint("📸 CHECKPOINT 4: Stopping Camera...");
+      // Stop camera before processing to free resources
+      // await _stopCamera();
+      await _controller!.pausePreview();
 
-    setState(() {
-      sudokuBoard = List<Map<String, int>>.from(
-        (result['board'] as List).cast<Map<String, int>>(),
-      );
-      statusMessage = _statusText(result['status'] as int);
-      isProcessing = false;
-    });
+      debugPrint("📸 CHECKPOINT 6: Entering Bridge (Native Call)...");
+      final result = await bridge.solveSudokuFromBytes(imageBytes);
+      debugPrint("📸 CHECKPOINT 7: Exited Bridge successfully.");
+
+      if (mounted) {
+        setState(() {
+          sudokuBoard = List<Map<String, int>>.from(
+            (result['board'] as List).cast<Map<String, int>>(),
+          );
+          statusMessage = _statusText(result['status'] as int);
+          isCameraActive = false;
+        });
+        await _controller?.dispose();
+        _controller = null;
+      }
+    } catch (e) {
+      print("Error capturing: $e");
+      _stopCamera(); // Ensure camera closes on error
+    } finally {
+      if (mounted) setState(() => isProcessing = false);
+    }
+  }
+
+  // Update this function to jump straight to the camera
+  void _startScanning() {
+    _startCamera();
   }
 
   @override
   Widget build(BuildContext context) {
+    // 1. If camera is active, show the full-screen camera UI
+    if (isCameraActive) {
+      return _buildCameraUI(); // I've wrapped your existing camera Stack below
+    }
+
+    // 2. This is now BOTH your Home and Solution screen
     return Scaffold(
-      appBar: AppBar(title: const Text('Sudoku Solver')),
+      appBar: AppBar(
+        title: const Text('Sudoku Solver'),
+        // Optional: clear the current board to start fresh
+        actions: sudokuBoard.isNotEmpty
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () => setState(() => sudokuBoard = []),
+                ),
+              ]
+            : [],
+      ),
       body: Container(
         width: double.infinity,
         color: Colors.grey[200],
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (!isInitialized)
-              const Text("Loading AI Model...")
-            else if (isProcessing)
-              const CircularProgressIndicator()
-            else if (sudokuBoard.isEmpty)
+            if (sudokuBoard.isEmpty) ...[
+              // HOME STATE: No puzzle scanned yet
+              const Icon(Icons.grid_on, size: 100, color: Colors.grey),
+              const SizedBox(height: 20),
               Text(
-                statusMessage.isEmpty
-                    ? "Tap the camera button to scan a puzzle"
-                    : statusMessage,
-              )
-            else
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(statusMessage),
-                  const SizedBox(height: 8),
-                  AspectRatio(aspectRatio: 1, child: _buildSudokuGrid()),
-                ],
+                isBridgeReady ? "Ready to solve!" : "Loading AI Model...",
+                style: const TextStyle(fontSize: 18, color: Colors.black54),
               ),
+            ] else ...[
+              // SOLUTION STATE: Show the grid and status
+              Text(
+                statusMessage,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              AspectRatio(aspectRatio: 1, child: _buildSudokuGrid()),
+            ],
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: isInitialized ? _takePhoto : null,
-        label: Text(isInitialized ? "Scan Sudoku" : "Initializing..."),
+        onPressed: isBridgeReady ? _startScanning : null,
+        label: Text(sudokuBoard.isEmpty ? "Scan Sudoku" : "Scan Another"),
         icon: const Icon(Icons.camera_alt),
-        backgroundColor: isInitialized ? null : Colors.grey,
+        backgroundColor: isBridgeReady ? null : Colors.grey,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  // To keep the build method clean, move the Camera Stack logic here:
+  Widget _buildCameraUI() {
+    final bool isControllerReady =
+        _controller != null && _controller!.value.isInitialized;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          if (isControllerReady && isCameraActive)
+            Center(child: CameraPreview(_controller!))
+          else
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+
+          // Centered Target Square
+          Center(
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.5),
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+
+          // Close Button
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  onPressed: _stopCamera,
+                ),
+              ),
+            ),
+          ),
+
+          // Bottom Controls
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 30),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    const SizedBox(width: 50), // Spacer
+                    isProcessing
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : FloatingActionButton.large(
+                            onPressed: _takePhoto,
+                            backgroundColor: Colors.white,
+                            child: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.black,
+                              size: 40,
+                            ),
+                          ),
+                    SizedBox(
+                      width: 50,
+                      child: IconButton(
+                        icon: Icon(
+                          isFlashOn ? Icons.flash_on : Icons.flash_off,
+                          color: Colors.white,
+                        ),
+                        onPressed: _toggleFlash,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
