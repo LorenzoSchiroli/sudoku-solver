@@ -117,7 +117,6 @@ class _SudokuScreenState extends State<SudokuScreen>
   }
 
   Future<void> _takePhoto() async {
-    debugPrint("📸 CHECKPOINT 1: Button Pressed");
     if (_controller == null ||
         !_controller!.value.isInitialized ||
         isProcessing)
@@ -126,19 +125,12 @@ class _SudokuScreenState extends State<SudokuScreen>
     setState(() => isProcessing = true);
 
     try {
-      debugPrint("📸 CHECKPOINT 2: Taking Picture...");
       final XFile image = await _controller!.takePicture();
-      debugPrint("📸 CHECKPOINT 3: Reading Bytes...");
       final Uint8List imageBytes = await image.readAsBytes();
 
-      debugPrint("📸 CHECKPOINT 4: Stopping Camera...");
-      // Stop camera before processing to free resources
-      // await _stopCamera();
       await _controller!.pausePreview();
 
-      debugPrint("📸 CHECKPOINT 6: Entering Bridge (Native Call)...");
       final result = await bridge.solveSudokuFromBytes(imageBytes);
-      debugPrint("📸 CHECKPOINT 7: Exited Bridge successfully.");
 
       if (mounted) {
         setState(() {
