@@ -44,9 +44,10 @@ endif()
 
 # ---- Flutter bridge ----
 
+# find_library(log-lib log)
 add_library(sudoku_bridge SHARED src/flutter_bridge.cpp)
 target_include_directories(sudoku_bridge PUBLIC src)
-target_link_libraries(sudoku_bridge PRIVATE sudoku_main ${OpenCV_LIBS})
+target_link_libraries(sudoku_bridge PRIVATE sudoku_main ${OpenCV_LIBS}) #${log-lib})
 
 set_target_properties(sudoku_bridge PROPERTIES
     OUTPUT_NAME "sudoku_bridge"
@@ -59,3 +60,5 @@ set_target_properties(sudoku_bridge PROPERTIES
 #     add_executable(test_sudoku_solver tests/test_sudoku_solver.cpp)
 #     target_link_libraries(test_sudoku_solver PRIVATE sudoku_solver)
 # endif()
+
+
