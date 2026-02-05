@@ -29,10 +29,60 @@ SudokuSolver::SudokuSolver() {
     }
 }
 
+bool SudokuSolver::is_valid_input(const std::vector<std::vector<int>>& input) {
+    int count = 0;
+    uint16_t rows[9] = {0}, cols[9] = {0}, boxes[9] = {0};
+
+    for (int r = 0; r < N; ++r) {
+        for (int c = 0; c < N; ++c) {
+            int v = input[r][c];
+            if (v == 0) continue;
+
+            // Check 1: Range check
+            if (v < 1 || v > 9) return false;
+
+            // Check 2: Duplicate check using bitmasks
+            int b = (r / 3) * 3 + (c / 3);
+            uint16_t bit = 1 << (v - 1);
+
+            if ((rows[r] & bit) || (cols[c] & bit) || (boxes[b] & bit)) {
+                return false;
+            }
+
+            rows[r] |= bit;
+            cols[c] |= bit;
+            boxes[b] |= bit;
+            count++;
+        }
+    }
+
+    // Check 3: Minimum clues (17-number rule)
+    if (count < 17) {
+        return false; 
+    }
+
+    // Check 4: Potential Dead Ends
+    // Ensure every empty cell has at least one valid candidate
+    for (int r = 0; r < N; ++r) {
+        for (int c = 0; c < N; ++c) {
+            if (input[r][c] == 0) {
+                int b = (r / 3) * 3 + (c / 3);
+                uint16_t used = rows[r] | cols[c] | boxes[b];
+                if ((used & 0x1FF) == 0x1FF) { // All 9 bits are set
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
 // Main entry point
 bool SudokuSolver::solve(const std::vector<std::vector<int>>& input, std::vector<std::vector<int>>& result) {
     if (input.size() != N) return false;
     for (const auto& row : input) if (row.size() != N) return false;
+    if (!is_valid_input(input)) return false;
 
     // Reset state
     grid.fill(0);
@@ -168,5 +218,3 @@ bool SudokuSolver::solve_recursive(size_t k) {
 
     return false;
 }
-
-// main removed: moved to `test_sudoku_solver.cpp` for library-style usage

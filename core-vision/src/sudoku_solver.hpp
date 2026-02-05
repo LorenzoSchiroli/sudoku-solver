@@ -26,4 +26,5 @@ private:
     void remove(int idx, int val);
     uint16_t get_candidates(int idx) const;
     bool solve_recursive(size_t k);
+    bool is_valid_input(const std::vector<std::vector<int>>& input);
 };
