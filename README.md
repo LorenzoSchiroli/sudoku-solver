@@ -5,10 +5,15 @@ https://github.com/user-attachments/assets/b787e070-1abc-4f62-ac0a-6e9cc3e9d37d
 A sudoku solver mobile app with vision capabilities. The computer vision and solver algorithm core are written in c++ and designed for maximum speed and efficiency. The mobile app is written in Flutter.
 
 The computer vision and solver algorithm core is structured in 4 steps:
+
 1. **Sudoku detection**: detection of the board of the sudoku. The module search for the biggest square and crop it correcting the perspective.
+
 2. **Sudoku recongnition**: recognizing the sudoku cells. The module find the filled cells and crops the numbers inside them.
+
 3. **Digits recognition**: recognizing the digits (using a deep learning model) given the cropped images.
+
 4. **Sudoku solver**: algorithm to solve the sudoku. 
+
 All these steps combined takes a total of 140ms average on mobile CPU (Google Tensor 1).
 
 The Android app is made with Flutter, while the deep learning model for digit recongnition is made with Pytorch and Huggigface.
@@ -18,12 +23,17 @@ The the deep learning degit recongnition model is deployed with optimizations:
 - converted to onnx format
 - 8bit static quatization
 - batch processing
+
 More specifically, it's a resnet18 trained on SVHN dataset.
 
 The sudoku solver algorithm is implemented in an efficient way too. Here some optimizations:
+
 - Bitmasks: Rows, cols, and boxes use 16-bit integers to track used numbers.
+
 - MRV Heuristic: Always branches on the cell with the fewest valid options first.
+
 - Lookup Tables: Pre-computed indices to avoid division/modulo operations in the hot loop.
+
 - Cache Locality: Uses a flat std::array.
 
 ## Installation
