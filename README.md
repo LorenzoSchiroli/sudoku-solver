@@ -1,5 +1,7 @@
 # Sudoku solver
 
+https://github.com/user-attachments/assets/b787e070-1abc-4f62-ac0a-6e9cc3e9d37d
+
 A sudoku solver mobile app with vision capabilities. The computer vision and solver algorithm core are written in c++ and designed for maximum speed and efficiency. The mobile app is written in Flutter.
 
 The computer vision and solver algorithm core is structured in 4 steps:
