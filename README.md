@@ -26,7 +26,7 @@ The sudoku solver algorithm is implemented in an efficient way too. Here some op
 
 ## Installation
 
-1. Generate the dogit recognition model (resnet18_svhn_int8.onnx):
+1. Generate the digit recognition model (resnet18_svhn_int8.onnx):
     1. `cd ml-pipeline`
     2. Install UV package manager
     3. Run: `uv sync`
