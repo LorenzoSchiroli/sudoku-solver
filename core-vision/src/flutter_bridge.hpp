@@ -26,8 +26,6 @@ enum SudokuStatusC : int32_t {
     SudokuStatus_InitializationError = 3
 };
 
-// #pragma pack(push, 1) // Force no padding
-// C representation of a cell (row-major ordering expected)
 typedef struct {
     int32_t number; // 0..9
     int32_t mask;   // 0 or 1
@@ -35,30 +33,39 @@ typedef struct {
 
 // Flattened 9x9 grid in row-major order
 typedef struct {
-    int32_t status; // SudokuStatusC
+    int32_t status;
     // 81 cells (9 rows * 9 cols)
     CellC cells[81];
 } SudokuResultC;
-// #pragma pack(pop)
 
-// Lifecycle for processor (opaque pointer representing a SudokuMain instance)
-// model_path may be nullptr to use the default model path.
+// `model_path` may be nullptr to use the library default model path.
+/**
+ * Create a new processor instance.
+ *
+ * @param model_path Optional path to the digit-recognition model.
+ * @return Opaque pointer to the processor or nullptr on failure.
+ */
 SUDOKU_BRIDGE_API void* sudoku_create_processor(const char* model_path);
+
+/**
+ * Destroy a processor previously returned by `sudoku_create_processor`.
+ */
 SUDOKU_BRIDGE_API void sudoku_destroy_processor(void* processor);
 
-// Process image from bytes (e.g., JPEG/PNG content). Returns a pointer to an
-// allocated SudokuResultC which must be freed with sudoku_free_result.
-// Returns nullptr on fatal allocation error.
+/**
+ * Process an in-memory image buffer (e.g., PNG/JPEG bytes).
+ *
+ * The function returns a newly allocated `SudokuResultC*` which the caller
+ * must free with `sudoku_free_result`. On fatal errors this returns an
+ * error-encoded result instead of throwing.
+ */
 SUDOKU_BRIDGE_API SudokuResultC* sudoku_process_image_bytes(void* processor, const uint8_t* data, size_t length);
 
-// SUDOKU_BRIDGE_API void debug_image_bridge(uint8_t* data, size_t length);
-
-// Convenience: process image from file path
-// SUDOKU_BRIDGE_API SudokuResultC* sudoku_process_image_file(void* processor, const char* path);
-
-// Free result returned by any of the processing functions
+/**
+ * Free a `SudokuResultC*` returned by the processing functions.
+ */
 SUDOKU_BRIDGE_API void sudoku_free_result(SudokuResultC* result);
 
 #ifdef __cplusplus
-} // extern "C"
+}
 #endif
