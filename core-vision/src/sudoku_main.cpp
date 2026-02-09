@@ -9,10 +9,16 @@
 #include "sudoku_solver.hpp"
 #include "sudoku_main.hpp"
 
-// Construct and load digit recognition model in the class constructor
+/**
+ * Construct SudokuMain and load the digit-recognition model.
+ */
 SudokuMain::SudokuMain(const std::string& modelPath)
     : recognizer(modelPath) {}
 
+/**
+ * Process a color image and return the detected/solved Sudoku grid.
+ * This function orchestrates detection, grid extraction, recognition and solving.
+ */
 SudokuResult SudokuMain::sudoku_img2grid(const cv::Mat& originalImage) {
 
     std::vector<std::vector<Cell>> sudokuGrid(9, std::vector<Cell>(9, {0, 0}));

@@ -9,7 +9,9 @@
 using namespace cv;
 using namespace std;
 
-// Helper to order points: Top-Left, Top-Right, Bottom-Right, Bottom-Left
+/**
+ * Order 4 points into top-left, top-right, bottom-right, bottom-left.
+ */
 vector<Point2f> orderPoints(const vector<Point>& pts) {
     vector<Point2f> sortedPts(4);
     vector<Point2f> origPts;
@@ -33,7 +35,9 @@ vector<Point2f> orderPoints(const vector<Point>& pts) {
     return sortedPts;
 }
 
-// New: detect sudoku boards in a given image and return each warped board as a Mat
+/**
+ * Detect quadrilateral contours that resemble Sudoku boards, warp and return them.
+ */
 vector<Mat> detectSudokuBoards(const Mat& src) {
     vector<Mat> boards;
     if (src.empty()) return boards;
@@ -91,7 +95,6 @@ vector<Mat> detectSudokuBoards(const Mat& src) {
 
         if (approx.size() == 4 && isContourConvex(approx)) {
 
-            // NEW: Check if any point touches the image edge
             bool touchesEdge = false;
             int margin = 2; // px margin
             for (const auto& p : approx) {
@@ -145,11 +148,11 @@ vector<Mat> detectSudokuBoards(const Mat& src) {
     return boards;
 }
 
-// New: helper that returns the first detected board or std::nullopt if none
+/**
+ * Convenience helper returning the first detected board or std::nullopt.
+ */
 std::optional<Mat> detectSudokuBoard(const Mat& src) {
     auto boards = detectSudokuBoards(src);
     if (boards.empty()) return std::nullopt;
     return boards.front();
 }
-
-// main removed: moved to `test_sudoku_detection.cpp` for library-style usage

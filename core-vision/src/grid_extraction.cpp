@@ -17,38 +17,25 @@ const int GRID_SIZE = 9;
  * @param min_ratio The minimum ratio of edge pixels to total pixels for the cell to be 'full'.
  * @return True if the pixel count exceeds the ratio threshold (-1), False otherwise (0).
  */
+/**
+ * Heuristic: determine whether an edge-detected cell contains a digit.
+ * Examines a centered sub-region and compares non-zero edge pixel density
+ * against `min_ratio`.
+ */
 bool is_cell_full(const cv::Mat& cell_roi, double min_ratio = 0.005) {
-    // 1. Define a Central Region (Half the cell size)
-    // Margin is 1/4 of the dimension on all sides (leaving 1/2 the size in the center).
-    // This is mathematically equivalent to checking half the size.
     int margin = std::min(cell_roi.rows, cell_roi.cols) / 3;
-    
-    // Calculate the central region for analysis
-    cv::Rect center_region(margin, margin, 
-                           cell_roi.cols - 2 * margin, 
-                           cell_roi.rows - 2 * margin);
-
-    // No fallback: Trust the calculation based on your requirement
+    cv::Rect center_region(margin, margin, cell_roi.cols - 2 * margin, cell_roi.rows - 2 * margin);
     cv::Mat check_area = cell_roi(center_region);
-    
-    // 2. Count the Non-Zero (Edge) Pixels
-    int edge_pixel_count = cv::countNonZero(check_area); 
-
-    // 3. Calculate Ratio and Check Threshold
+    int edge_pixel_count = cv::countNonZero(check_area);
     double total_pixels = check_area.total();
     double current_ratio = edge_pixel_count / total_pixels;
-
-    // DEBUG
-    // if (current_ratio > min_ratio) {
-    //     std::string filename = "cell.png";
-    //     cv::imwrite(filename, check_area);
-    // }
-
-    // Use an empirically determined ratio (0.005 or 0.5%) as a starting point.
-    // This will flag a cell as 'full' if more than 0.5% of its central pixels are edges.
-    return current_ratio > min_ratio; 
+    return current_ratio > min_ratio;
 }
 
+/**
+ * Remove bright border regions from a binary (0/255) image using floodfill.
+ * This clears connected components touching the image border.
+ */
 void removeBorders(cv::Mat& binaryImg){
     CV_Assert(binaryImg.type() == CV_8UC1);
 
@@ -75,33 +62,32 @@ void removeBorders(cv::Mat& binaryImg){
     }
 }
 
+/**
+ * Crop the binary image to the contour that contains the image center.
+ * Returns an empty Mat if none found.
+ */
 cv::Mat cropToContainingContour(cv::Mat& binaryImg) {
     removeBorders(binaryImg);
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(binaryImg.clone(), contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    
-    // 1. Define the specific point to check (Center of the rect)
-    cv::Point2f targetPoint(
-        (binaryImg.cols - 1) / 2.0f, // Width is image.cols
-        (binaryImg.rows - 1) / 2.0f  // Height is image.rows
-    );
+
+    cv::Point2f targetPoint((binaryImg.cols - 1) / 2.0f, (binaryImg.rows - 1) / 2.0f);
 
     for (const auto& contour : contours) {
-        // 3. Stage 1: Fast Bounding Box Check
-        // If the point isn't even in the square, don't bother calculating polygon geometry
         cv::Rect r = cv::boundingRect(contour);
-        
         if (r.contains(targetPoint)) {
             cv::Rect cropRegion = r & cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
             return binaryImg(cropRegion).clone();
         }
     }
 
-    // Return empty if no contour contains the point
     return cv::Mat();
 }
 
-// Replace old cropToContainingContour with new signature/implementation:
+/**
+ * Find the most central contour within `region` of `binaryImg` and return
+ * its bounding rectangle (in full-image coords). Returns empty rect on failure.
+ */
 cv::Rect cropToContainingContour(const cv::Mat& binaryImg, const cv::Rect& region) {
     // Validate and clamp region
     cv::Rect bounded = region & cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
@@ -109,9 +95,6 @@ cv::Rect cropToContainingContour(const cv::Mat& binaryImg, const cv::Rect& regio
 
     // Operate on a copy of the binary subregion (so the original binaryImg isn't modified)
     cv::Mat cell = binaryImg(bounded).clone();
-
-    // DEBUG
-    // cv::imwrite("cell.png", cell);
 
     removeBorders(cell);
 
@@ -156,47 +139,33 @@ cv::Rect cropToContainingContour(const cv::Mat& binaryImg, const cv::Rect& regio
     // Keep within global image bounds
     cropRegion &= cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
     return cropRegion;
-    // for (const auto& contour : contours) {
-    //     cv::Rect r = cv::boundingRect(contour);
-    //     if (r.contains(targetPoint)) {
-            
-    //     }
-    // }
-
-    // return cv::Rect(); // empty -> no containing contour found
 }
 
-// New: pad, make square, and clamp the region to image bounds
+/**
+ * Add padding to `region` and make it square, clamped inside `imgSize`.
+ */
 cv::Rect addPadding(const cv::Rect& region, const cv::Size& imgSize, int pad = 3) {
-	if (region.empty()) return cv::Rect();
+    if (region.empty()) return cv::Rect();
 
-	// Start with padded bbox
-	int paddedW = region.width + 2 * pad;
-	int paddedH = region.height + 2 * pad;
+    int paddedW = region.width + 2 * pad;
+    int paddedH = region.height + 2 * pad;
+    int side = std::max(paddedW, paddedH);
+    side = std::min(side, std::min(imgSize.width, imgSize.height));
 
-	// Side length to make square
-	int side = std::max(paddedW, paddedH);
-
-	// Ensure side does not exceed image dimensions
-	side = std::min(side, std::min(imgSize.width, imgSize.height));
-
-	// Center the square on the original region center
-	int centerX = region.x + region.width / 2;
-	int centerY = region.y + region.height / 2;
-
-	int newX = centerX - side / 2;
-	int newY = centerY - side / 2;
-
-	// Clamp to image bounds
-	newX = std::max(0, std::min(newX, imgSize.width - side));
-	newY = std::max(0, std::min(newY, imgSize.height - side));
-
-	return cv::Rect(newX, newY, side, side);
+    int centerX = region.x + region.width / 2;
+    int centerY = region.y + region.height / 2;
+    int newX = centerX - side / 2;
+    int newY = centerY - side / 2;
+    newX = std::max(0, std::min(newX, imgSize.width - side));
+    newY = std::max(0, std::min(newY, imgSize.height - side));
+    return cv::Rect(newX, newY, side, side);
 }
 
-// Main function for Sudoku analysis
+/**
+ * Analyze a full Sudoku board image and extract a 9x9 grid of cell crops.
+ * Empty cells are represented as empty cv::Mat entries.
+ */
 std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img) {
-    // 1. Validate and convert to grayscale (grayscale conversion remains inside this function)
     if (input_img.empty() || input_img.channels() != 3) {
         std::cerr << "ERROR: Empty or wrong image passed to analyze_sudoku_board()" << std::endl;
         return {};
@@ -211,15 +180,9 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
     cv::cvtColor(img_color, img_gray, cv::COLOR_BGR2GRAY);
 
     cv::GaussianBlur(img_gray, img_gray, cv::Size(9, 9), 0);
-    // Perform Canny Edge Detection on the entire image
+
     cv::Mat img_edges;
     cv::adaptiveThreshold(img_gray, img_edges, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 17, 4);
-    // cv::threshold(img_gray, img_edges, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
-
-    // // DEBUG
-    // std::string filename = "sudoku_edge.png";
-    // cv::imwrite(filename, img_edges);
-
 
     // Store cell crops; empty cv::Mat means empty cell
     std::vector<std::vector<cv::Mat>> sudoku_cells(GRID_SIZE, std::vector<cv::Mat>(GRID_SIZE));
@@ -228,12 +191,8 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
     int img_height = img_edges.rows;
 
     // --- Geometric Calculation based on Centering/Squareness ---
-    // int min_dim = std::min(img_width, img_height);
     double cell_size_x = (double)img_width / GRID_SIZE;
     double cell_size_y = (double)img_height / GRID_SIZE;
-    // double x_start = (img_width - min_dim) / 2.0;
-    // double y_start = (img_height - min_dim) / 2.0;
-    // ------------------------------------------------------------------
 
     // 2. Iterate through all 81 cells
     for (int row = 0; row < GRID_SIZE; ++row) {
@@ -302,5 +261,3 @@ std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img)
 
     return sudoku_cells;
 }
- 
-// main removed: moved to `test_grid_extraction.cpp` for library-style usage

@@ -27,9 +27,12 @@ void sudoku_destroy_processor(void* processor) {
     delete static_cast<SudokuMain*>(processor);
 }
 
+/**
+ * Allocate a minimal empty SudokuResultC with the provided status.
+ * Caller is responsible for freeing the returned pointer.
+ */
 static SudokuResultC* make_empty_result(SudokuStatusC status) {
     SudokuResultC* r = new (std::nothrow) SudokuResultC();
-    // if (!r) return nullptr;
     r->status = static_cast<int32_t>(status);
     for (int i = 0; i < 81; ++i) {
         r->cells[i].number = 0;
@@ -38,6 +41,10 @@ static SudokuResultC* make_empty_result(SudokuStatusC status) {
     return r;
 }
 
+/**
+ * Convert internal `SudokuResult` into the C ABI-friendly `SudokuResultC`.
+ * Allocates a new SudokuResultC; caller must free with `sudoku_free_result`.
+ */
 static SudokuResultC* convert_result(const SudokuResult& cppRes) {
     SudokuResultC* out = new (std::nothrow) SudokuResultC();
 
@@ -56,6 +63,10 @@ static SudokuResultC* convert_result(const SudokuResult& cppRes) {
     return out;
 }
 
+/**
+ * Process image bytes (JPEG/PNG). Returns allocated `SudokuResultC*`.
+ * On error returns an error-encoded result; never throws across the ABI.
+ */
 SudokuResultC* sudoku_process_image_bytes(void* processor, const uint8_t* data, size_t length) {
     if (!processor || !data || length == 0) return make_empty_result(SudokuStatus_InitializationError);
     try {

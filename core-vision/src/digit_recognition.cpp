@@ -7,6 +7,10 @@
 
 namespace fs = std::filesystem;
 
+/**
+ * Constructor: initialize ONNX Runtime session and tensor geometry.
+ * @param modelPath Path to the ONNX model file.
+ */
 DigitRecognizer::DigitRecognizer(const std::string& modelPath)
     : env(ORT_LOGGING_LEVEL_WARNING, "MnistInference"),
       memoryInfo(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault))
@@ -31,6 +35,12 @@ DigitRecognizer::DigitRecognizer(const std::string& modelPath)
     singleImageTensorSize = inputChannels * inputHeight * inputWidth;
 }
 
+/**
+ * Predict a variable-length list of images by chunking into fixed-size batches.
+ * Empty images are skipped and return a label 0.
+ * @param images Vector of input cv::Mat images.
+ * @return Vector of predicted labels (same length as `images`).
+ */
 std::vector<int> DigitRecognizer::predictList(const std::vector<cv::Mat>& images) {
     // 1. Initialize results with default 0
     std::vector<int> allPredictions(images.size(), 0);
@@ -76,6 +86,12 @@ std::vector<int> DigitRecognizer::predictList(const std::vector<cv::Mat>& images
     return allPredictions;
 }
 
+/**
+ * Run inference on a fixed-size batch (internal). The batch is padded with
+ * zeros when `batchImages.size() < batchSize`.
+ * @param batchImages Vector of images (length <= batchSize).
+ * @return Vector of predicted labels for the provided images.
+ */
 std::vector<int> DigitRecognizer::predictBatch(const std::vector<cv::Mat>& batchImages) {
     // 1. Prepare fixed-size input tensor
     // We allocate the FULL fixed batch size (filled with 0.0f)
@@ -138,6 +154,14 @@ std::vector<int> DigitRecognizer::predictBatch(const std::vector<cv::Mat>& batch
     return results;
 }
 
+/**
+ * Preprocess a single image into the provided float buffer arranged as CHW.
+ * Steps: convert to BGR, resize preserving aspect, pad to fixed size, and
+ * normalize pixels to [0,1].
+ * @param inputImage Source cv::Mat (any channels).
+ * @param dst Pointer to preallocated float buffer (singleImageTensorSize).
+ * @return true on success, false otherwise.
+ */
 bool DigitRecognizer::preprocessToBuffer(const cv::Mat& inputImage, float* dst) {
     cv::Mat processed;
 

@@ -20,6 +20,9 @@
  * * Compile with: g++ -O3 -std=c++20 sudoku_solver.cpp -o solver
  */
 
+/**
+ * Precompute helper tables (box indices) for fast indexing.
+ */
 SudokuSolver::SudokuSolver() {
     // Precompute box indices to avoid repetitive calculation
     for (int i = 0; i < CELL_COUNT; ++i) {
@@ -29,6 +32,11 @@ SudokuSolver::SudokuSolver() {
     }
 }
 
+/**
+ * Validate the input puzzle: range checks, duplicates, and minimum clues.
+ * @param input 9x9 integer grid (0 == empty).
+ * @return true if input is plausible, false otherwise.
+ */
 bool SudokuSolver::is_valid_input(const std::vector<std::vector<int>>& input) {
     int count = 0;
     uint16_t rows[9] = {0}, cols[9] = {0}, boxes[9] = {0};
@@ -78,7 +86,11 @@ bool SudokuSolver::is_valid_input(const std::vector<std::vector<int>>& input) {
     return true;
 }
 
-// Main entry point
+/**
+ * Solve the puzzle using bitmasking and MRV heuristic.
+ * @param input Input 9x9 grid.
+ * @param result Output 9x9 solved grid on success.
+ */
 bool SudokuSolver::solve(const std::vector<std::vector<int>>& input, std::vector<std::vector<int>>& result) {
     if (input.size() != N) return false;
     for (const auto& row : input) if (row.size() != N) return false;
@@ -116,6 +128,9 @@ bool SudokuSolver::solve(const std::vector<std::vector<int>>& input, std::vector
         return false;
     }
 
+/**
+ * Print a flat internal grid for debugging with box separators.
+ */
 void SudokuSolver::print_grid(const Grid& g) {
     for (int r = 0; r < N; ++r) {
         if (r > 0 && r % 3 == 0) std::cout << "------+-------+------\n";
@@ -127,7 +142,9 @@ void SudokuSolver::print_grid(const Grid& g) {
     }
 }
 
-// Mark a number as used in the bitmasks and grid
+/**
+ * Place a value at index `idx` and update row/col/box bitmasks.
+ */
 void SudokuSolver::place(int idx, int val) {
     int r = idx / N;
     int c = idx % N;
@@ -140,7 +157,9 @@ void SudokuSolver::place(int idx, int val) {
     box_mask[b] |= bit;
 }
 
-// Unmark a number (backtracking)
+/**
+ * Remove a value (backtrack) at index `idx` and clear bitmasks.
+ */
 void SudokuSolver::remove(int idx, int val) {
     int r = idx / N;
     int c = idx % N;
@@ -153,8 +172,9 @@ void SudokuSolver::remove(int idx, int val) {
     box_mask[b] &= ~bit;
 }
 
-// Get a bitmask of valid moves for a specific cell index
-// Returns 9 bits where 1 means "available"
+/**
+ * Return a 9-bit mask of available candidates for cell `idx`.
+ */
 [[nodiscard]] uint16_t SudokuSolver::get_candidates(int idx) const {
     int r = idx / N;
     int c = idx % N;
@@ -164,9 +184,10 @@ void SudokuSolver::remove(int idx, int val) {
     return ~(row_mask[r] | col_mask[c] | box_mask[b]) & 0x1FF;
 }
 
-// Recursive backtracking with MRV (Minimum Remaining Values) heuristic
-// k is the number of filled cells in the *empty_cells* vector we've processed so far
-// However, for efficiency with swapping, we pass the current index in the empty_cells vector
+/**
+ * Recursive backtracking solver implementing MRV: picks the empty cell
+ * with the fewest candidates and tries each candidate recursively.
+ */
 bool SudokuSolver::solve_recursive(size_t k) {
     if (k == empty_cells.size()) {
         return true; // All cells filled
