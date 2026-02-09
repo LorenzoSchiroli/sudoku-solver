@@ -56,44 +56,6 @@ static SudokuResultC* convert_result(const SudokuResult& cppRes) {
     return out;
 }
 
-// void debug_image_bridge(uint8_t* data, size_t length) {
-//     if (data == nullptr || length < 100) return;
-
-//     // --- TEST 1: RAW MODIFICATION ---
-//     // Zero out the first 100kb (or half the image). 
-//     // This WILL break the header and result in a broken image icon in Flutter.
-//     // If you see a "broken image" icon, the bridge IS working.
-//     // std::memset(data, 0, length / 2); 
-
-//     // --- TEST 2: OPENCV ---
-//     cv::Mat rawData(1, length, CV_8UC1, data);
-//     cv::Mat img = cv::imdecode(rawData, cv::IMREAD_COLOR);
-    
-//     if (img.empty()) {
-//         // If decode fails, make the buffer all zeros so Dart sees a change
-//         std::memset(data, 0, length);
-//         return;
-//     }
-
-//     // Draw something unmistakable: A huge red rectangle
-//     // Note: Scalar is (Blue, Green, Red)
-//     cv::rectangle(img, cv::Rect(50, 50, img.cols - 100, img.rows - 100), cv::Scalar(0, 0, 255), 20);
-
-//     std::vector<uint8_t> outBuf;
-//     // Use a high compression ratio to ensure it fits in the original 'length'
-//     std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 50}; 
-//     cv::imencode(".jpg", img, outBuf, params);
-    
-//     // LOGGING: If you have an Android log setup, check the sizes here
-//     if (outBuf.size() <= length) {
-//         std::memcpy(data, outBuf.data(), outBuf.size());
-//     } else {
-//         // FORCE A VISIBLE FAILURE: If it didn't fit, corrupt the image 
-//         // so you know why it's not showing the crosshair.
-//         std::memset(data, 0, 500); 
-//     }
-// }
-
 SudokuResultC* sudoku_process_image_bytes(void* processor, const uint8_t* data, size_t length) {
     if (!processor || !data || length == 0) return make_empty_result(SudokuStatus_InitializationError);
     try {
@@ -108,18 +70,8 @@ SudokuResultC* sudoku_process_image_bytes(void* processor, const uint8_t* data, 
     }
 }
 
-// SudokuResultC* sudoku_process_image_file(void* processor, const char* path) {
-//     if (!processor) return make_empty_result(SudokuStatus_InitializationError); 
-//     if (!path) return make_empty_result(SudokuStatus_GridNotFound);
-//     cv::Mat img = cv::imread(path);
-//     if (img.empty()) return make_empty_result(SudokuStatus_GridNotFound);
-//     SudokuMain* proc = static_cast<SudokuMain*>(processor);
-//     SudokuResult cppRes = proc->sudoku_img2grid(img);
-//     return convert_result(cppRes);
-// }
-
 void sudoku_free_result(SudokuResultC* result) {
     delete result;
 }
 
-} // extern "C"
+}
