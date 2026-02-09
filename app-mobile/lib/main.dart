@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'sudoku_bridge.dart';
 import 'camera.dart';
 
+/// Application entry point. Ensures Flutter bindings are initialized
+/// and launches the `SudokuScreen` wrapped in a `MaterialApp`.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MaterialApp(home: SudokuScreen()));
@@ -34,12 +36,16 @@ class _SudokuScreenState extends State<SudokuScreen> {
     super.dispose();
   }
 
+  /// Loads and initializes the native AI model via `SudokuBridge`.
+  /// Marks the UI as ready once the bridge is initialized.
   Future<void> _setupBridge() async {
     await bridge.init();
     if (mounted) setState(() => isBridgeReady = true);
   }
 
-  // Open camera page and await result
+  /// Launches the `CameraPage` to capture a puzzle image, waits for
+  /// the native solver result, and updates the UI state with the
+  /// returned board and status message.
   void _startScanning() async {
     final result = await Navigator.of(context).push(
       PageRouteBuilder(
@@ -62,9 +68,6 @@ class _SudokuScreenState extends State<SudokuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Main/Home/Solution screen
-
-    // 2. This is now BOTH your Home and Solution screen
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sudoku Solver'),
@@ -117,6 +120,8 @@ class _SudokuScreenState extends State<SudokuScreen> {
     );
   }
 
+  /// Constructs a 9x9 visual grid for the current `sudokuBoard`.
+  /// Uses `mask` to choose styling for original vs. filled numbers.
   Widget _buildSudokuGrid() {
     return Container(
       margin: const EdgeInsets.all(16),
@@ -164,6 +169,8 @@ class _SudokuScreenState extends State<SudokuScreen> {
   }
 }
 
+/// Converts a numeric solver `status` code into a human-readable
+/// string shown to the user on the solution screen.
 String _statusText(int status) {
   switch (status) {
     case 0:

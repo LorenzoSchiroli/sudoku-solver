@@ -18,6 +18,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   bool isProcessing = false;
   bool isFlashOn = false;
 
+  /// Initializes the state for this widget: registers the
+  /// `WidgetsBindingObserver` and starts the camera controller.
   @override
   void initState() {
     super.initState();
@@ -25,6 +27,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     _startCamera();
   }
 
+  /// Cleans up resources: removes lifecycle observer and
+  /// disposes the active `CameraController` if present.
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -32,6 +36,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// Responds to app lifecycle changes. Disposes the camera when the
+  /// app becomes inactive and restarts it when the app resumes.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_controller == null || !_controller!.value.isInitialized) return;
@@ -42,6 +48,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Initializes the device camera: selects an available camera,
+  /// creates a `CameraController`, initializes it and sets the flash
+  /// mode to off. If there are no cameras available, this is a no-op.
   Future<void> _startCamera() async {
     List<CameraDescription> available = widget.cameras ?? [];
     if (available.isEmpty) {
@@ -73,12 +82,16 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Stops the camera preview, disposes the controller and
+  /// navigates back (pops) the current route if mounted.
   Future<void> _stopCamera() async {
     await _controller?.dispose();
     _controller = null;
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// Toggles the camera flash between `FlashMode.torch` and `FlashMode.off`.
+  /// Updates internal `isFlashOn` state after changing the hardware mode.
   Future<void> _toggleFlash() async {
     if (_controller == null) return;
     try {
@@ -90,6 +103,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Captures a single photo from the camera, pauses the preview,
+  /// sends the image bytes to the `SudokuBridge` for processing,
+  /// and returns the result to the caller via `Navigator.pop`.
   Future<void> _takePhoto() async {
     if (_controller == null ||
         !_controller!.value.isInitialized ||
@@ -118,6 +134,9 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Builds the camera UI: shows the camera preview (when ready),
+  /// an overlay frame for alignment, and controls (close, shutter,
+  /// and flash toggle) for user interaction.
   @override
   Widget build(BuildContext context) {
     final bool isControllerReady =

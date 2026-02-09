@@ -6,7 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 
-// 1. Define C Structs
+/// FFI representation of a single Sudoku cell returned from native code.
+/// - `number`: the digit in the cell (0 if empty)
+/// - `mask`: a flag indicating whether the digit was originally present (1)
 final class CellC extends Struct {
   @Int32()
   external int number;
@@ -14,6 +16,9 @@ final class CellC extends Struct {
   external int mask;
 }
 
+/// FFI representation of the overall Sudoku result returned by the
+/// native processor. `status` is a small integer code and `cells` is
+/// an array of 81 `CellC` entries representing the grid.
 final class SudokuResultC extends Struct {
   @Int32()
   external int status;
@@ -21,12 +26,14 @@ final class SudokuResultC extends Struct {
   external Array<CellC> cells;
 }
 
-// 2. Load the Library
+/// The native dynamic library handle. On Android this opens the
+/// packaged `.so`, on other platforms it uses the current process
+/// (useful for desktop embedding during development).
 final DynamicLibrary nativeLib = Platform.isAndroid
     ? DynamicLibrary.open('libsudoku_bridge.so')
     : DynamicLibrary.process();
 
-// 3. Signatures
+// Signatures
 typedef CreateProcessorC = Pointer<Void> Function(Pointer<Utf8> modelPath);
 typedef CreateProcessorDart = Pointer<Void> Function(Pointer<Utf8> modelPath);
 
@@ -49,7 +56,7 @@ typedef FreeResultDart = void Function(Pointer<SudokuResultC> result);
 typedef DebugImageC = Void Function(Pointer<Uint8> data, IntPtr length);
 typedef DebugImageDart = void Function(Pointer<Uint8> data, int length);
 
-// 4. Helper Class
+// Helper Class
 class SudokuBridge {
   static final SudokuBridge _instance = SudokuBridge._internal();
   factory SudokuBridge() => _instance;
@@ -73,11 +80,12 @@ class SudokuBridge {
     );
   }
 
-  /// Extracts the model from assets to local storage and initializes C++
+  /// Extracts the model asset into the application's documents
+  /// directory (if not already present) and initializes the native
+  /// processor by passing the extracted model path to the C++ side.
   Future<void> init() async {
     if (_processor != null) return;
 
-    // Path on Android: /data/user/0/com.example.../app_flutter/resnet18_svhn_int8.onnx
     final docsDir = await getApplicationDocumentsDirectory();
     final modelPath = p.join(docsDir.path, "resnet18_svhn_int8.onnx");
     final modelFile = File(modelPath);
@@ -97,6 +105,10 @@ class SudokuBridge {
     calloc.free(modelPathPtr);
   }
 
+  /// Sends the provided image bytes to the native processor and
+  /// returns a `Map` containing a `board` (list of 81 cell maps with
+  /// `number` and `mask`) and a numeric `status` code. Handles
+  /// allocation and deallocation of native memory used for the call.
   Future<Map<String, dynamic>> solveSudokuFromBytes(
     Uint8List imageBytes,
   ) async {
@@ -150,32 +162,4 @@ class SudokuBridge {
       malloc.free(buffer);
     }
   }
-
-  /// Send raw image bytes to the native debug bridge.
-  /// This copies bytes into native memory, calls the C function, then frees.
-  /// Send raw image bytes to the native debug bridge.
-  /// This copies bytes into native memory, calls the C function, reads back
-  /// any modifications and returns the modified bytes.
-  ///
-  //   Future<Uint8List> sendDebugImage(Uint8List imageBytes) async {
-  //     // 1. Allocate exactly the amount of memory needed on the native heap
-  //     final Pointer<Uint8> buffer = malloc.allocate<Uint8>(imageBytes.length);
-
-  //     try {
-  //       // 2. Create a typed view of the native memory and copy Dart bytes into it
-  //       final nativeBytes = buffer.asTypedList(imageBytes.length);
-  //       nativeBytes.setAll(0, imageBytes);
-
-  //       // 3. Call the C++ function
-  //       // C++ modifies the memory at this pointer address directly
-  //       _debugImageFunc(buffer, imageBytes.length);
-
-  //       // 4. Extract the data back into a Dart-managed Uint8List
-  //       // Use .fromList() to CLONE the data before we free the pointer
-  //       return Uint8List.fromList(nativeBytes);
-  //     } finally {
-  //       // 5. ALWAYS free the pointer to prevent a memory leak
-  //       malloc.free(buffer);
-  //     }
-  //   }
 }
