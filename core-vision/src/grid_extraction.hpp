@@ -1,8 +1,8 @@
 #pragma once
 
+#include <opencv2/core.hpp>
 #include <string>
 #include <vector>
-#include <opencv2/core.hpp>
 
 /**
  * Analyze a full Sudoku board image and extract a 9x9 grid of cell crops.
@@ -11,6 +11,7 @@
  * Empty cells are represented as an empty `cv::Mat`.
  *
  * @param image Input color image containing a single Sudoku board.
- * @return 9x9 matrix of cell images (rows x cols). Returns empty vector on error.
+ * @return 9x9 matrix of cell images (rows x cols). Returns empty vector on
+ * error.
  */
-std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& image);
+std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat &image);

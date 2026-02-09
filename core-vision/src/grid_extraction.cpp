@@ -1,263 +1,279 @@
 #include "grid_extraction.hpp"
-#include <iostream>
-#include <string>
-#include <vector>
+#include <algorithm> // New header for safe min/max
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <opencv2/opencv.hpp>
-#include <algorithm> // New header for safe min/max
+#include <string>
+#include <vector>
 
 // Define the size of the Sudoku grid
 const int GRID_SIZE = 9;
 
 /**
- * Determines if a cell contains a number by checking the density of edge pixels 
+ * Determines if a cell contains a number by checking the density of edge pixels
  * in its central region against a defined minimum ratio.
  * * @param cell_roi The region of interest (already edge-detected).
- * @param min_ratio The minimum ratio of edge pixels to total pixels for the cell to be 'full'.
- * @return True if the pixel count exceeds the ratio threshold (-1), False otherwise (0).
+ * @param min_ratio The minimum ratio of edge pixels to total pixels for the
+ * cell to be 'full'.
+ * @return True if the pixel count exceeds the ratio threshold (-1), False
+ * otherwise (0).
  */
 /**
  * Heuristic: determine whether an edge-detected cell contains a digit.
  * Examines a centered sub-region and compares non-zero edge pixel density
  * against `min_ratio`.
  */
-bool is_cell_full(const cv::Mat& cell_roi, double min_ratio = 0.005) {
-    int margin = std::min(cell_roi.rows, cell_roi.cols) / 3;
-    cv::Rect center_region(margin, margin, cell_roi.cols - 2 * margin, cell_roi.rows - 2 * margin);
-    cv::Mat check_area = cell_roi(center_region);
-    int edge_pixel_count = cv::countNonZero(check_area);
-    double total_pixels = check_area.total();
-    double current_ratio = edge_pixel_count / total_pixels;
-    return current_ratio > min_ratio;
+bool is_cell_full(const cv::Mat &cell_roi, double min_ratio = 0.005) {
+  int margin = std::min(cell_roi.rows, cell_roi.cols) / 3;
+  cv::Rect center_region(margin, margin, cell_roi.cols - 2 * margin,
+                         cell_roi.rows - 2 * margin);
+  cv::Mat check_area = cell_roi(center_region);
+  int edge_pixel_count = cv::countNonZero(check_area);
+  double total_pixels = check_area.total();
+  double current_ratio = edge_pixel_count / total_pixels;
+  return current_ratio > min_ratio;
 }
 
 /**
  * Remove bright border regions from a binary (0/255) image using floodfill.
  * This clears connected components touching the image border.
  */
-void removeBorders(cv::Mat& binaryImg){
-    CV_Assert(binaryImg.type() == CV_8UC1);
+void removeBorders(cv::Mat &binaryImg) {
+  CV_Assert(binaryImg.type() == CV_8UC1);
 
-    // Mask must be 2 pixels larger than the image
-    cv::Mat mask(binaryImg.rows + 2, binaryImg.cols + 2, CV_8U, cv::Scalar(0));
+  // Mask must be 2 pixels larger than the image
+  cv::Mat mask(binaryImg.rows + 2, binaryImg.cols + 2, CV_8U, cv::Scalar(0));
 
-    const int rows = binaryImg.rows;
-    const int cols = binaryImg.cols;
+  const int rows = binaryImg.rows;
+  const int cols = binaryImg.cols;
 
-    // Top & bottom rows
-    for (int x = 0; x < cols; ++x) {
-        if (binaryImg.at<uchar>(0, x) == 255)
-            cv::floodFill(binaryImg, mask, {x, 0}, 0);
-        if (binaryImg.at<uchar>(rows - 1, x) == 255)
-            cv::floodFill(binaryImg, mask, {x, rows - 1}, 0);
-    }
+  // Top & bottom rows
+  for (int x = 0; x < cols; ++x) {
+    if (binaryImg.at<uchar>(0, x) == 255)
+      cv::floodFill(binaryImg, mask, {x, 0}, 0);
+    if (binaryImg.at<uchar>(rows - 1, x) == 255)
+      cv::floodFill(binaryImg, mask, {x, rows - 1}, 0);
+  }
 
-    // Left & right columns
-    for (int y = 0; y < rows; ++y) {
-        if (binaryImg.at<uchar>(y, 0) == 255)
-            cv::floodFill(binaryImg, mask, {0, y}, 0);
-        if (binaryImg.at<uchar>(y, cols - 1) == 255)
-            cv::floodFill(binaryImg, mask, {cols - 1, y}, 0);
-    }
+  // Left & right columns
+  for (int y = 0; y < rows; ++y) {
+    if (binaryImg.at<uchar>(y, 0) == 255)
+      cv::floodFill(binaryImg, mask, {0, y}, 0);
+    if (binaryImg.at<uchar>(y, cols - 1) == 255)
+      cv::floodFill(binaryImg, mask, {cols - 1, y}, 0);
+  }
 }
 
 /**
  * Crop the binary image to the contour that contains the image center.
  * Returns an empty Mat if none found.
  */
-cv::Mat cropToContainingContour(cv::Mat& binaryImg) {
-    removeBorders(binaryImg);
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(binaryImg.clone(), contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+cv::Mat cropToContainingContour(cv::Mat &binaryImg) {
+  removeBorders(binaryImg);
+  std::vector<std::vector<cv::Point>> contours;
+  cv::findContours(binaryImg.clone(), contours, cv::RETR_EXTERNAL,
+                   cv::CHAIN_APPROX_SIMPLE);
 
-    cv::Point2f targetPoint((binaryImg.cols - 1) / 2.0f, (binaryImg.rows - 1) / 2.0f);
+  cv::Point2f targetPoint((binaryImg.cols - 1) / 2.0f,
+                          (binaryImg.rows - 1) / 2.0f);
 
-    for (const auto& contour : contours) {
-        cv::Rect r = cv::boundingRect(contour);
-        if (r.contains(targetPoint)) {
-            cv::Rect cropRegion = r & cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
-            return binaryImg(cropRegion).clone();
-        }
+  for (const auto &contour : contours) {
+    cv::Rect r = cv::boundingRect(contour);
+    if (r.contains(targetPoint)) {
+      cv::Rect cropRegion = r & cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
+      return binaryImg(cropRegion).clone();
     }
+  }
 
-    return cv::Mat();
+  return cv::Mat();
 }
 
 /**
  * Find the most central contour within `region` of `binaryImg` and return
  * its bounding rectangle (in full-image coords). Returns empty rect on failure.
  */
-cv::Rect cropToContainingContour(const cv::Mat& binaryImg, const cv::Rect& region) {
-    // Validate and clamp region
-    cv::Rect bounded = region & cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
-    if (bounded.empty()) return cv::Rect();
+cv::Rect cropToContainingContour(const cv::Mat &binaryImg,
+                                 const cv::Rect &region) {
+  // Validate and clamp region
+  cv::Rect bounded = region & cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
+  if (bounded.empty())
+    return cv::Rect();
 
-    // Operate on a copy of the binary subregion (so the original binaryImg isn't modified)
-    cv::Mat cell = binaryImg(bounded).clone();
+  // Operate on a copy of the binary subregion (so the original binaryImg isn't
+  // modified)
+  cv::Mat cell = binaryImg(bounded).clone();
 
-    removeBorders(cell);
+  removeBorders(cell);
 
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(cell.clone(), contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+  std::vector<std::vector<cv::Point>> contours;
+  cv::findContours(cell.clone(), contours, cv::RETR_EXTERNAL,
+                   cv::CHAIN_APPROX_SIMPLE);
 
-    if (contours.empty()) {
-        return cv::Rect(); // empty -> no contours found
+  if (contours.empty()) {
+    return cv::Rect(); // empty -> no contours found
+  }
+
+  // Check center point of the cell-subregion
+  cv::Point2f targetPoint((cell.cols - 1) / 2.0f, (cell.rows - 1) / 2.0f);
+
+  // Find the contour whose bounding box is closest to the center point
+  int bestIdx = -1;
+  double bestDist = std::numeric_limits<double>::max();
+  for (int i = 0; i < contours.size(); ++i) {
+    cv::Moments m = cv::moments(contours[i]);
+    if (m.m00 == 0)
+      continue;
+    cv::Point2f c(static_cast<float>(m.m10 / m.m00),
+                  static_cast<float>(m.m01 / m.m00));
+    double d = cv::norm(c - targetPoint);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
     }
+  }
 
-    // Check center point of the cell-subregion
-    cv::Point2f targetPoint((cell.cols - 1) / 2.0f, (cell.rows - 1) / 2.0f);
+  // Empty contours
+  if (bestIdx == -1) {
+    return cv::Rect(); // empty -> no contours found
+  }
 
-    // Find the contour whose bounding box is closest to the center point
-    int bestIdx = -1;
-    double bestDist = std::numeric_limits<double>::max();
-    for (int i = 0; i < contours.size(); ++i)
-    {
-        cv::Moments m = cv::moments(contours[i]);
-        if (m.m00 == 0) continue;
-        cv::Point2f c(
-            static_cast<float>(m.m10 / m.m00),
-            static_cast<float>(m.m01 / m.m00)
-        );
-        double d = cv::norm(c - targetPoint);
-        if (d < bestDist)
-        {
-            bestDist = d;
-            bestIdx = i;
-        }
-    }
-
-    // Empty contours
-    if (bestIdx == -1) {
-        return cv::Rect(); // empty -> no contours found
-    }
-
-    const auto& contour = contours[bestIdx];
-    cv::Rect r = cv::boundingRect(contour);
-    // Shift local rect back to full-image coordinates
-    cv::Rect cropRegion(r.x + bounded.x, r.y + bounded.y, r.width, r.height);
-    // Keep within global image bounds
-    cropRegion &= cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
-    return cropRegion;
+  const auto &contour = contours[bestIdx];
+  cv::Rect r = cv::boundingRect(contour);
+  // Shift local rect back to full-image coordinates
+  cv::Rect cropRegion(r.x + bounded.x, r.y + bounded.y, r.width, r.height);
+  // Keep within global image bounds
+  cropRegion &= cv::Rect(0, 0, binaryImg.cols, binaryImg.rows);
+  return cropRegion;
 }
 
 /**
  * Add padding to `region` and make it square, clamped inside `imgSize`.
  */
-cv::Rect addPadding(const cv::Rect& region, const cv::Size& imgSize, int pad = 3) {
-    if (region.empty()) return cv::Rect();
+cv::Rect addPadding(const cv::Rect &region, const cv::Size &imgSize,
+                    int pad = 3) {
+  if (region.empty())
+    return cv::Rect();
 
-    int paddedW = region.width + 2 * pad;
-    int paddedH = region.height + 2 * pad;
-    int side = std::max(paddedW, paddedH);
-    side = std::min(side, std::min(imgSize.width, imgSize.height));
+  int paddedW = region.width + 2 * pad;
+  int paddedH = region.height + 2 * pad;
+  int side = std::max(paddedW, paddedH);
+  side = std::min(side, std::min(imgSize.width, imgSize.height));
 
-    int centerX = region.x + region.width / 2;
-    int centerY = region.y + region.height / 2;
-    int newX = centerX - side / 2;
-    int newY = centerY - side / 2;
-    newX = std::max(0, std::min(newX, imgSize.width - side));
-    newY = std::max(0, std::min(newY, imgSize.height - side));
-    return cv::Rect(newX, newY, side, side);
+  int centerX = region.x + region.width / 2;
+  int centerY = region.y + region.height / 2;
+  int newX = centerX - side / 2;
+  int newY = centerY - side / 2;
+  newX = std::max(0, std::min(newX, imgSize.width - side));
+  newY = std::max(0, std::min(newY, imgSize.height - side));
+  return cv::Rect(newX, newY, side, side);
 }
 
 /**
  * Analyze a full Sudoku board image and extract a 9x9 grid of cell crops.
  * Empty cells are represented as empty cv::Mat entries.
  */
-std::vector<std::vector<cv::Mat>> analyze_sudoku_board(const cv::Mat& input_img) {
-    if (input_img.empty() || input_img.channels() != 3) {
-        std::cerr << "ERROR: Empty or wrong image passed to analyze_sudoku_board()" << std::endl;
-        return {};
-    }
+std::vector<std::vector<cv::Mat>>
+analyze_sudoku_board(const cv::Mat &input_img) {
+  if (input_img.empty() || input_img.channels() != 3) {
+    std::cerr << "ERROR: Empty or wrong image passed to analyze_sudoku_board()"
+              << std::endl;
+    return {};
+  }
 
-    cv::Mat img_color = input_img.clone();
+  cv::Mat img_color = input_img.clone();
 
-    // Resize with INTER_AREA to remove moire pattern
-    cv::resize(img_color, img_color, cv::Size(512, 512), 0, 0, cv::INTER_AREA);
+  // Resize with INTER_AREA to remove moire pattern
+  cv::resize(img_color, img_color, cv::Size(512, 512), 0, 0, cv::INTER_AREA);
 
-    cv::Mat img_gray;
-    cv::cvtColor(img_color, img_gray, cv::COLOR_BGR2GRAY);
+  cv::Mat img_gray;
+  cv::cvtColor(img_color, img_gray, cv::COLOR_BGR2GRAY);
 
-    cv::GaussianBlur(img_gray, img_gray, cv::Size(9, 9), 0);
+  cv::GaussianBlur(img_gray, img_gray, cv::Size(9, 9), 0);
 
-    cv::Mat img_edges;
-    cv::adaptiveThreshold(img_gray, img_edges, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 17, 4);
+  cv::Mat img_edges;
+  cv::adaptiveThreshold(img_gray, img_edges, 255,
+                        cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV,
+                        17, 4);
 
-    // Store cell crops; empty cv::Mat means empty cell
-    std::vector<std::vector<cv::Mat>> sudoku_cells(GRID_SIZE, std::vector<cv::Mat>(GRID_SIZE));
+  // Store cell crops; empty cv::Mat means empty cell
+  std::vector<std::vector<cv::Mat>> sudoku_cells(
+      GRID_SIZE, std::vector<cv::Mat>(GRID_SIZE));
 
-    int img_width = img_edges.cols;
-    int img_height = img_edges.rows;
+  int img_width = img_edges.cols;
+  int img_height = img_edges.rows;
 
-    // --- Geometric Calculation based on Centering/Squareness ---
-    double cell_size_x = (double)img_width / GRID_SIZE;
-    double cell_size_y = (double)img_height / GRID_SIZE;
+  // --- Geometric Calculation based on Centering/Squareness ---
+  double cell_size_x = (double)img_width / GRID_SIZE;
+  double cell_size_y = (double)img_height / GRID_SIZE;
 
-    // 2. Iterate through all 81 cells
-    for (int row = 0; row < GRID_SIZE; ++row) {
-        for (int col = 0; col < GRID_SIZE; ++col) {
-            // Calculate ROI coordinates
-            int x = static_cast<int>(col * cell_size_x);
-            int y = static_cast<int>(row * cell_size_y);
-            int w = static_cast<int>(cell_size_x);
-            int h = static_cast<int>(cell_size_y);
+  // 2. Iterate through all 81 cells
+  for (int row = 0; row < GRID_SIZE; ++row) {
+    for (int col = 0; col < GRID_SIZE; ++col) {
+      // Calculate ROI coordinates
+      int x = static_cast<int>(col * cell_size_x);
+      int y = static_cast<int>(row * cell_size_y);
+      int w = static_cast<int>(cell_size_x);
+      int h = static_cast<int>(cell_size_y);
 
-            // enlarge
-            int padding = 10;
-            x = std::max(0, x - padding);
-            y = std::max(0, y - padding);
-            w = std::min(w + padding*2, img_width - x);
-            h = std::min(h + padding*2, img_height - y);
+      // enlarge
+      int padding = 10;
+      x = std::max(0, x - padding);
+      y = std::max(0, y - padding);
+      w = std::min(w + padding * 2, img_width - x);
+      h = std::min(h + padding * 2, img_height - y);
 
-            cv::Rect cell_rect(x, y, w, h);
-            cv::Mat cell_roi_bw = img_edges(cell_rect);
+      cv::Rect cell_rect(x, y, w, h);
+      cv::Mat cell_roi_bw = img_edges(cell_rect);
 
-            if (is_cell_full(cell_roi_bw, 0.1)) {
-                // Get crop region (in full-image coords) from the binary image and cell coordinates
-                cv::Rect cropRegion = cropToContainingContour(img_edges, cell_rect);
-                if (cropRegion.area() > 0) {
-                    // cropRegion = cell_rect;
-                    // Add padding and make square (clamped to image)
-                    cropRegion = addPadding(cropRegion, img_color.size(), 3);
-                    // Extract the color crop from the original color image
-                    cv::Mat cell_roi = img_color(cropRegion).clone();
-                    sudoku_cells[row][col] = cell_roi;
-                }
-            } else {
-                // leave as empty cv::Mat
-            }
+      if (is_cell_full(cell_roi_bw, 0.1)) {
+        // Get crop region (in full-image coords) from the binary image and cell
+        // coordinates
+        cv::Rect cropRegion = cropToContainingContour(img_edges, cell_rect);
+        if (cropRegion.area() > 0) {
+          // cropRegion = cell_rect;
+          // Add padding and make square (clamped to image)
+          cropRegion = addPadding(cropRegion, img_color.size(), 3);
+          // Extract the color crop from the original color image
+          cv::Mat cell_roi = img_color(cropRegion).clone();
+          sudoku_cells[row][col] = cell_roi;
         }
+      } else {
+        // leave as empty cv::Mat
+      }
     }
+  }
 
-    // // DEBUG
-    // std::filesystem::path cells_dir("cells");
-    // try {
-    //     if (!std::filesystem::exists(cells_dir)) {
-    //         std::filesystem::create_directory(cells_dir);
-    //     } else {
-    //         for (const auto& entry : std::filesystem::directory_iterator(cells_dir)) {
-    //             std::error_code ec;
-    //             std::filesystem::remove_all(entry.path(), ec);
-    //             if (ec) {
-    //                 std::cerr << "WARNING: Failed to remove " << entry.path()
-    //                             << ": " << ec.message() << std::endl;
-    //             }
-    //         }
-    //     }
-    // } catch (const std::exception& e) {
-    //     std::cerr << "ERROR: Filesystem operation failed: " << e.what() << std::endl;
-    // }
-    // for (size_t r = 0; r < sudoku_cells.size(); ++r) {
-    //     for (size_t c = 0; c < sudoku_cells[r].size(); ++c) {
-    //         const cv::Mat& mat = sudoku_cells[r][c];
-    //         if (!mat.empty()) {
-    //             std::string filename = "cell_" + std::to_string(r) + "_" + std::to_string(c) + ".png";
-    //             std::filesystem::path outpath = cells_dir / filename;
-    //             cv::imwrite(outpath.string(), mat);
-    //         }
-    //     }
-    // }
+  // // DEBUG
+  // std::filesystem::path cells_dir("cells");
+  // try {
+  //     if (!std::filesystem::exists(cells_dir)) {
+  //         std::filesystem::create_directory(cells_dir);
+  //     } else {
+  //         for (const auto& entry :
+  //         std::filesystem::directory_iterator(cells_dir)) {
+  //             std::error_code ec;
+  //             std::filesystem::remove_all(entry.path(), ec);
+  //             if (ec) {
+  //                 std::cerr << "WARNING: Failed to remove " << entry.path()
+  //                             << ": " << ec.message() << std::endl;
+  //             }
+  //         }
+  //     }
+  // } catch (const std::exception& e) {
+  //     std::cerr << "ERROR: Filesystem operation failed: " << e.what() <<
+  //     std::endl;
+  // }
+  // for (size_t r = 0; r < sudoku_cells.size(); ++r) {
+  //     for (size_t c = 0; c < sudoku_cells[r].size(); ++c) {
+  //         const cv::Mat& mat = sudoku_cells[r][c];
+  //         if (!mat.empty()) {
+  //             std::string filename = "cell_" + std::to_string(r) + "_" +
+  //             std::to_string(c) + ".png"; std::filesystem::path outpath =
+  //             cells_dir / filename; cv::imwrite(outpath.string(), mat);
+  //         }
+  //     }
+  // }
 
-    return sudoku_cells;
+  return sudoku_cells;
 }
