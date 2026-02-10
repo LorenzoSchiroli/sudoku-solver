@@ -1,13 +1,12 @@
-# Sudoku Solver
-### Real-time Sudoku Recognition and Solution via Mobile Vision
+# Sudoku Recognition and Solver
+### Low-latency on-device OCR and constraint-solving pipeline for mobile devices
 
-A high-performance mobile application that uses computer vision and machine learning to detect, recognize, and solve sudoku puzzles in real-time. Built with a focus on speed and efficiency, combining advanced C++ algorithms with a modern Flutter frontend.
+A high-performance computer vision and ML inference on edge hardware to detect, recognize, and solve sudoku puzzles in real-time. Built with a focus on speed and efficiency, combining advanced C++ algorithms with a modern Flutter frontend.
 
 https://github.com/user-attachments/assets/b787e070-1abc-4f62-ac0a-6e9cc3e9d37d
 
 **Key Features:**
-- **Rapid Processing**: Complete vision-to-solution pipeline completes in ~140ms on mobile hardware (Google Tensor G1)
-- **Real-time Detection**: Computer vision pipeline detects and extracts sudoku grids with perspective correction
+- **Rapid Processing**: Complete vision-to-solution pipeline completes in ~110ms on mobile hardware (Google Tensor G1)
 - **Deep Learning Integration**: Optimized ResNet18 model for digit recognition deployed on edge devices
 - **Efficient Solving**: Constraint-propagation algorithm with advanced optimization techniques
 
@@ -44,7 +43,7 @@ The solution processes captured images through a sophisticated 4-stage pipeline:
 
 4. **Sudoku Solving**
    - Executes constraint-satisfaction algorithm to compute the solution
-   - Optimized for minimal latency on CPU-only mobile devices
+   - Optimized for minimal latency
 
 ### Model Optimization Strategy
 
@@ -65,6 +64,33 @@ The sudoku solver employs several key optimizations for competitive performance:
 - **MRV Heuristic**: Prioritizes cells with minimum remaining values to reduce search space
 - **Lookup Tables**: Pre-computed indices eliminate costly division/modulo operations in hot loops
 - **Cache Optimization**: Flat `std::array` structure maximizes CPU cache locality
+
+### Design tradeoffs
+
+- CNN for digit recognition: Classical template-based OCR approaches were insufficient under perspective distortion and font variability, while full OCR systems were unnecessarily heavy. A lightweight CNN trained for single-digit classification provided the best accuracy–latency tradeoff.
+- Classical computer vision for grid detection: Board and cell detection are implemented using geometric and morphological operations rather than neural networks, as they are faster, deterministic, and sufficiently robust for this task.
+- SVHN instead of MNIST: MNIST-trained models showed poor generalization to real-world printed digits, while SVHN provided significantly better robustness to font style, scale, and noise.
+- ResNet18: Chosen as the smallest architecture with stable convergence on SVHN while remaining quantization-friendly.
+- ONNX Runtime: Selected over alternatives for easier C++ integration and cross-platform consistency.
+
+### Strength and limitations
+
+These design decisions result in a system with the following strengths and known limitations.
+
+### Strengths
+
+The system was validated against a variety of real-world conditions:
+- Robust to strong perspective distortion and oblique viewing angles (excluding curved surfaces)
+- Supports multiple sudoku boards within a single frame
+- Works with both printed boards and digital displays (moiré artifacts mitigated)
+- Handles varied fonts, digit sizes, and board color schemes
+
+#### Limitations
+
+- Performance degrades under very low-light conditions (mitigated via optional camera flash)
+- Performance degrades on scribbled or dirty boards
+- Model is trained exclusively on printed digits; handwritten digits are out of scope
+- Board detection assumes the presence of a clear outer square border
 
 
 ## Tech Stack
@@ -127,7 +153,7 @@ Potential improvements and roadmap items:
 
 **Vision Core**
 - Continuous stream detection: Real-time grid detection without requiring explicit photo capture <!-- idea: keep square detection and add area range to catch it >
-- Handwritten digit recognition with discriminator capability: Multi-model approach to handle both printed and handwritten numbers, with the capability to distinbuish the two <!-- idea: use resnet10 or something, build dataset with handwritten mnist/emnist + digital synthetic, add head to discriminate >
+- Handwritten digit recognition with discriminator capability: Multi-model approach to handle both printed and handwritten numbers, with the capability to distinbuish the two <!-- idea: fiewer resnet layers, build dataset with handwritten mnist/emnist + digital synthetic, add head to discriminate >
 
 **Mobile App**
 - Solution visualization toggle: Show/hide computed solution
