@@ -16,6 +16,8 @@ https://github.com/user-attachments/assets/b787e070-1abc-4f62-ac0a-6e9cc3e9d37d
   - [Computer Vision Pipeline](#computer-vision-pipeline)
   - [Model Optimization Strategy](#model-optimization-strategy)
   - [Solving Algorithm](#solving-algorithm)
+  - [Design tradeoffs](#design-tradeoffs)
+  - [Strength and limitations](#strength-and-limitations)
 - [Tech Stack](#tech-stack)
 - [Installation & Build](#installation--build)
 - [Development & Debugging](#development--debugging)
@@ -77,7 +79,7 @@ The sudoku solver employs several key optimizations for competitive performance:
 
 These design decisions result in a system with the following strengths and known limitations.
 
-### Strengths
+#### Strengths
 
 The system was validated against a variety of real-world conditions:
 - Robust to strong perspective distortion and oblique viewing angles (excluding curved surfaces)
