@@ -1,4 +1,4 @@
-# Sudoku Recognition and Solver
+# Sudoku Scanner and Solver
 ### Low-latency on-device OCR and constraint-solving pipeline for mobile devices
 
 A high-performance computer vision and ML inference on edge hardware to detect, recognize, and solve sudoku puzzles in real-time. Built with a focus on speed and efficiency, combining advanced C++ algorithms with a modern Flutter frontend.
